@@ -26,6 +26,7 @@ test("the comment starts with the marker the workflow reads back", () => {
   const body = render(report, run);
   assert.equal(body.split("\n")[0], MARKER("checked", "v0.1.22"));
   assert.equal(renderFailure(run, "超时").split("\n")[0], MARKER("failed", "v0.1.22"));
+  assert.equal(render(report, { ...run, auto: true }).split("\n")[0], "<!-- mygo-upstream checked v0.1.22 auto -->");
 });
 
 test("nothing the model writes can forge a marker or mention someone", () => {

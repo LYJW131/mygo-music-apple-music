@@ -215,7 +215,7 @@ async function call(name: string, input: Record<string, unknown>): Promise<strin
       if (!names.length || !names.every((n) => typeof n === "string" && /^[a-z0-9][a-z0-9+.:=~-]*$/.test(n)))
         throw new Error("packages must be apt package names");
       const r = await sh(
-        `sudo -n apt-get install -y -q --no-install-recommends ${names.map(quote).join(" ")} 2>&1 | tail -n 40`,
+        `set -o pipefail; sudo -n apt-get install -y -q --no-install-recommends ${names.map(quote).join(" ")} 2>&1 | tail -n 40`,
         600_000,
         false,
       );

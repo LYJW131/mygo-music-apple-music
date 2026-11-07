@@ -61,14 +61,19 @@ jobs:
           target=${INPUT_TARGET:-$(gh release view -R "$UPSTREAM" --json tagName --jq .tagName)}
           comments=$(gh api --paginate "$repo/issues/$issue/comments?per_page=100" \
             --jq '.[] | select(.user.login == "lyjw131[bot]") | "\(.created_at) \(.body | split("\n")[0])"' | tr -d '\r')
-          marks=$(sed -n 's/^[^ ]* <!-- mygo-upstream \(checked\|failed\) \([^ ]*\) -->$/\1 \2/p' <<<"$comments")
-          last=$(tail -n 1 <<<"$marks" | cut -d ' ' -f 2)
-          checked=$(grep '^checked ' <<<"$marks" | tail -n 1 | cut -d ' ' -f 2 || true)
-          if [ -z "$INPUT_TARGET" ] && [ "$last" = "$target" ]; then
+          marks=$(sed -n 's/^[^ ]* <!-- mygo-upstream \(checked\|failed\) \([^ ]*\)\( auto\)\? -->$/\1 \2/p' <<<"$comments")
+          # By version, not by date: a run by hand on an older release doesn't
+          # move the next automatic one back.
+          checked=$(grep '^checked ' <<<"$marks" | cut -d ' ' -f 2 | sort -V | tail -n 1 || true)
+          if [ -z "$INPUT_TARGET" ] && [ "$(cut -d ' ' -f 2 <<<"$marks" | grep -cxF "$target")" != 0 ]; then
             echo "$target was looked at already."
             exit 0
           fi
-          today=$(awk -v since="$(date -u -d '24 hours ago' +%FT%TZ)" '$1 >= since && $2 == "<!--"' <<<"$comments" | wc -l)
+          if [ -z "$INPUT_TARGET" ] && [ -n "$checked" ] && [ "$(printf '%s\n' "$checked" "$target" | sort -V | tail -n 1)" = "$checked" ]; then
+            echo "$target is older than $checked, checked already."
+            exit 0
+          fi
+          today=$(awk -v since="$(date -u -d '24 hours ago' +%FT%TZ)" '$1 >= since && $2 == "<!--" && $(NF - 1) == "auto"' <<<"$comments" | wc -l)
           if [ -z "$INPUT_TARGET" ] && [ "$today" -ge "$DAILY_RUNS" ]; then
             echo "::notice::$today runs in the last 24 hours; $target waits."
             exit 0
@@ -196,6 +201,7 @@ jobs:
           BASE: ${{ needs.detect.outputs.base }}
           TARGET: ${{ needs.detect.outputs.target }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          AUTO: ${{ github.event_name == 'schedule' }}
         run: |
           node scripts/upstream-watch/comment.ts > "$RUNNER_TEMP/comment.md"
           cat "$RUNNER_TEMP/comment.md" >> "$GITHUB_STEP_SUMMARY"

@@ -1,6 +1,7 @@
 // Prints the issue comment for a run of upstream-watch.ts, from what the
 // Upstream workflow passes on: REPORT (its JSON) or, when there is none,
-// FAILURE; USAGE; BASE, TARGET, UPSTREAM and RUN_URL.
+// FAILURE; USAGE; BASE, TARGET, UPSTREAM, RUN_URL and AUTO ("true" for a
+// scheduled run).
 
 import { isReport, render, renderFailure, type Run } from "./report.ts";
 
@@ -18,6 +19,7 @@ const run: Run = {
   target: env("TARGET"),
   upstream: env("UPSTREAM"),
   runUrl: env("RUN_URL"),
+  auto: env("AUTO") === "true",
   usage: usage && typeof usage === "object" ? (usage as Run["usage"]) : undefined,
 };
 const report = parse(env("REPORT"));

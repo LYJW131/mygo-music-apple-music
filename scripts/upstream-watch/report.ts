@@ -96,7 +96,10 @@ export function isReport(value: unknown): value is Report {
   );
 }
 
-export const MARKER = (state: "checked" | "failed", tag: string) => `<!-- mygo-upstream ${state} ${tag} -->`;
+// "auto" marks a scheduled run's comment: only those count against the daily
+// limit.
+export const MARKER = (state: "checked" | "failed", tag: string, auto = false) =>
+  `<!-- mygo-upstream ${state} ${tag}${auto ? " auto" : ""} -->`;
 
 const VERDICT_TEXT: Record<Verdict, string> = {
   none: "无需更新",
@@ -128,7 +131,7 @@ export function clean(value: string): string {
 
 const cell = (value: string) => clean(value).replace(/\n+/g, " ").replace(/\|/g, "\\|");
 
-export type Run = { base: string; target: string; upstream: string; runUrl: string; usage?: Usage };
+export type Run = { base: string; target: string; upstream: string; runUrl: string; auto?: boolean; usage?: Usage };
 export type Usage = {
   model: string;
   effort: string;
@@ -141,7 +144,7 @@ export type Usage = {
 export function render(report: Report, run: Run): string {
   const release = (tag: string) => `[${tag}](https://github.com/${run.upstream}/releases/tag/${tag})`;
   const lines = [
-    MARKER("checked", run.target),
+    MARKER("checked", run.target, run.auto),
     `## MyGo Music ${release(run.base)} → ${release(run.target)}：${VERDICT_TEXT[report.verdict]}`,
     "",
     clean(report.summary),
@@ -181,7 +184,7 @@ export function render(report: Report, run: Run): string {
 export function renderFailure(run: Run, reason: string): string {
   return limit(
     [
-      MARKER("failed", run.target),
+      MARKER("failed", run.target, run.auto),
       `## MyGo Music ${run.base} → ${run.target}：没检查完`,
       "",
       `${clean(reason)}。这个版本不会自动重试；手动运行工作流（填 target）可以再查一次。`,

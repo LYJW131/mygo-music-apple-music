@@ -26,7 +26,7 @@
     {
       "key": "wrapperKey",
       "label": "Wrapper Key",
-      "help": "Only for a wrapper behind a gateway that checks a key, such as one on Cloudflare"
+      "help": "The wrapper's key (API_KEY), the same one amdl uses: for a wrapper-manager on Cloudflare, or one that faces the internet. Empty for one on this computer or your network without a key."
     }
   ],
   "navigation": [

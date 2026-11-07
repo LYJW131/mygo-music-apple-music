@@ -1,7 +1,8 @@
 // Home, and the plugin's own pages: the charts and what was added lately.
 
 import { allPages, catalog, me, storefront } from "./api.ts";
-import { recentTracks } from "./library.ts";
+import { kept } from "./background.ts";
+import { LIST_KEPT, recentTracks } from "./library.ts";
 import { songsOf, toAlbum, toPlaylist, toStation } from "./models.ts";
 import { warm } from "./prefetch.ts";
 import { signedIn } from "./session.ts";
@@ -70,19 +71,29 @@ export async function browse({ page }: { page: string }): Promise<Browse> {
     }
     return { title: t("Charts"), subtitle: (await storefront()).toUpperCase(), sections };
   }
-  if (page === "recentlyAdded") {
-    const items = await allPages("/v1/me/library/recently-added", { limit: 25 }, 100);
-    return {
-      title: t("Recently Added"),
-      sections: [
-        {
-          title: t("Albums"),
-          albums: items.filter((i) => i.type.endsWith("albums")).map(toAlbum),
-          empty: t("Nothing added lately"),
-        },
-        { title: t("Playlists"), playlists: items.filter((i) => i.type.endsWith("playlists")).map(toPlaylist) },
-      ],
-    };
-  }
+  if (page === "recentlyAdded") return recentlyAdded();
   throw fail("unavailable", t("No such page"));
+}
+
+/** What the listener added lately, kept a while. */
+export function recentlyAdded(ahead = false): Promise<Browse> {
+  return kept(
+    "recentlyAdded",
+    { maxAge: LIST_KEPT },
+    async (pause) => {
+      const items = await allPages("/v1/me/library/recently-added", { limit: 25 }, 100, pause);
+      return {
+        title: t("Recently Added"),
+        sections: [
+          {
+            title: t("Albums"),
+            albums: items.filter((i) => i.type.endsWith("albums")).map(toAlbum),
+            empty: t("Nothing added lately"),
+          },
+          { title: t("Playlists"), playlists: items.filter((i) => i.type.endsWith("playlists")).map(toPlaylist) },
+        ],
+      };
+    },
+    ahead,
+  );
 }

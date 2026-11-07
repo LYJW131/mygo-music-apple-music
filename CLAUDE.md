@@ -2,21 +2,25 @@
 
 A [MyGo Music](https://github.com/egoist/mygo-music) plugin: Apple Music's catalog, the listener's library and whole
 songs as 256 kbps AAC, through the music.apple.com web player's API. Widevine keys come from a CDM written here in
-TypeScript (`src/widevine/`); ffmpeg decrypts. The plugin spec is MyGo Music's README ("Plugins") and
+TypeScript (`src/widevine/`); ffmpeg decrypts. Lossless (ALAC) goes through the listener's wrapper-manager and
+`amhelper`, a Go program shipped in the plugin (`helper/`). The plugin spec is MyGo Music's README ("Plugins") and
 `internal/plugin/*.go`.
 
 ## Commands
 
 ```bash
-npm run build        # src/ → dist/plugin (index.js bundle + plugin.json, locales, README, LICENSE)
+npm run build        # src/ → dist/plugin (index.js bundle + plugin.json, locales, READMEs, LICENSE)
 npm test             # build, then node --test tests/*.test.ts (offline)
-npm run check        # typecheck + prettier --check + test + package; what CI runs
+npm run check        # typecheck + prettier --check + test + test:helper + package; what CI runs
+npm run test:helper  # go vet + go test in helper/
+npm run helper       # builds amhelper for this machine into dist/plugin/bin
 npm run format       # prettier --write
 npm run test:live    # signed out, real Apple API (not in CI)
 APPLE_MUSIC_TOKEN_FILE=… npm run test:signed-in   # signed in, plays one song through ffmpeg (not in CI)
 ```
 
-Node 22.18+ runs the `.ts` scripts and tests directly (type stripping); there is no tsx.
+Node 22.18+ runs the `.ts` scripts and tests directly (type stripping); there is no tsx. Go (`helper/go.mod`) builds
+and tests amhelper.
 
 ## Layout
 
@@ -29,6 +33,22 @@ Node 22.18+ runs the `.ts` scripts and tests directly (type stripping); there is
 - Playing: `playback.ts` (webPlayback → m3u8 → license → ffmpeg `-listen` on 127.0.0.1), `prefetch.ts` (warm
   connections, resolve the first 3 songs of a page, ≤15/min), `ffmpeg.ts`, `artwork.ts` (private playlist covers are
   slow blobstore links, kept locally via ffmpeg).
+- Lossless: `lossless.ts` starts amhelper (config on stdin: wrapper, key, cache dir; it answers `{port, secret}`),
+  notes each catalog song's `audioTraits` and `extendedAssetUrls.enhancedHls`, and asks amhelper to `prepare` a song
+  and serve `song/<id>.m4a`; `null` falls back to AAC. Following amdl, lossless songs use the catalog's master
+  playlist and Hi-Res ones the wrapper's `/m3u8` first (the catalog's sometimes lacks 88.2–192 kHz).
+- `helper/`: `main.go` routes, `wrapper.go` the wrapper client (one request at a time, `queue.go` puts played songs
+  before ones prepared ahead), `hls.go` playlists, `mp4.go` decrypts Apple's 15 s fragments into ~1 s ones as they
+  arrive, `alac.go` checks a key's first samples look like ALAC (a wrong template gives noise, not an error),
+  `store.go` the disk cache (templates ≤300, tracks a week; a bad template or a 404 media file is fetched again).
+  `internal/fairplay` is amdl's Temari port, copied; change it there first.
+- Library ahead: `index.ts` wraps every export in `foreground` (`background.ts`), and `warmup.ts` fetches favorites,
+  saved albums, stations, recently added and the 20 playlists changed last, one request at a time, pausing while the
+  app asks for anything and a second after. Answers are `kept`: a library playlist until its `lastModifiedDate`
+  changes, the rest for 10 minutes; writes `forget` what they change. A function's second argument `ahead` marks a
+  background call; the app only ever passes one.
+- Liked is Favorite Songs, the library playlist with `canDelete: false` and no catalog version, hidden from
+  `playlists`; liking is a rating of 1.
 - Types: `src/types/host.d.ts` (the global `host`), `music.ts` (what MyGo takes), `apple.ts` (what Apple answers).
 
 ## Runtime constraints
@@ -41,7 +61,8 @@ The bundle runs in MyGo's moejs runtime, not Node:
 - Erasable TypeScript only (no `enum`, `namespace`, parameter properties): `erasableSyntaxOnly` is on, as Node strips
   types. Relative imports end in `.ts`.
 - Errors the app should act on carry a code: `fail("signIn" | "setup" | "unavailable" | "unsupported", message)`.
-- `host.storage` keys: `mediaUserToken`, `storefront`, `devToken`, `resolved` (song → media + key, ≤3000), `covers`.
+- `host.storage` keys: `mediaUserToken`, `storefront`, `profile` (name and picture, a day), `devToken`, `resolved` (song → media + key, ≤3000), `covers`,
+  `quality` (the app's last asked), `lossless` (song → its ALAC or none, a week).
 
 ## Conventions
 
@@ -54,13 +75,15 @@ The bundle runs in MyGo's moejs runtime, not Node:
 
 ## Releasing
 
-MyGo installs the latest release's zip (`mygo-music-apple-music-v<version>.zip`, no platform in the name), else the
-default branch, which has no built `index.js`: a release is required.
+MyGo installs the latest release's zip for its platform (`mygo-music-apple-music-v<version>-<os>-<arch>.zip`, with
+`bin/amhelper`), else the one without a platform (AAC only), else the default branch, which has no built `index.js`: a
+release is required. `scripts/package.ts` builds all of them; `scripts/helper.ts` lists the platforms.
 
 1. Raise `version` in `plugin.json`, push to `main`, wait for CI.
 2. Tag that commit `v<version>` and push the tag. The **Release** workflow checks the tag matches `plugin.json` and is
-   on `main`, runs `npm run check`, and publishes the release with the zip and its SHA-256. Every listener is
+   on `main`, runs `npm run check`, and publishes the release with the zips and their SHA-256. Every listener is
    offered it as an update, so ask the maintainer before pushing a tag.
 
-To try a build in the local app, copy `dist/plugin/*` into `~/.config/MyGo Music/plugins/apple-music/` (a real
+To try a build in the local app, unzip `dist/release/…-linux-amd64.zip` (or copy `dist/plugin/*` after
+`npm run helper`) into `~/.config/MyGo Music/plugins/apple-music/` (a real
 directory: symlinks aren't loaded) and restart MyGo.

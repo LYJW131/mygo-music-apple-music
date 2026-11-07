@@ -12,6 +12,7 @@ export function art(artwork: Artwork | undefined): string | undefined {
     .replace("{w}x{h}", "{size}x{size}")
     .replace("{w}", "{size}")
     .replace("{h}", "{size}")
+    .replace("{c}", "cc") // a crop, as profile pictures take
     .replace("{f}", "jpg");
 }
 

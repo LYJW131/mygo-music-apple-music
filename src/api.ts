@@ -70,8 +70,17 @@ export async function request<T = Body>(
 export const api = <T = Body>(path: string, params?: Params, options?: RequestOptions) =>
   request<T>(AMP + path + query(params), options);
 
+/**
+ * Apple's catalog, in the listener's storefront. The songs in it come with
+ * the address of their lossless master playlist, which a song played lossless
+ * starts from (lossless.ts).
+ */
 export async function catalog<T = Body>(path: string, params?: Params, options?: RequestOptions) {
-  return api<T>(`/v1/catalog/${await storefront()}${path}`, params, options);
+  return api<T>(
+    `/v1/catalog/${await storefront()}${path}`,
+    { "extend[songs]": "extendedAssetUrls", ...params },
+    options,
+  );
 }
 
 /** The listener's own: their library, ratings and recommendations. */
@@ -87,12 +96,18 @@ export function first(body: Body | null): Resource {
   return item;
 }
 
-/** Every page of a list, up to `max` items. */
-export async function allPages(path: string, params: Params, max = 1000): Promise<Resource[]> {
+/** Every page of a list, up to `max` items, calling pause between pages. */
+export async function allPages(
+  path: string,
+  params: Params,
+  max = 1000,
+  pause?: () => Promise<void>,
+): Promise<Resource[]> {
   if (path.startsWith("/v1/me")) needAccount();
   const out: Resource[] = [];
   let next: string | undefined = path + query(params);
   while (next && out.length < max) {
+    if (out.length && pause) await pause();
     const body: Body | null = await request(AMP + next);
     out.push(...(body?.data ?? []));
     next = body?.next;

@@ -2,7 +2,7 @@
   "Home": "主页",
   "Apple Music": "Apple Music",
   "Charts": "排行榜",
-  "Library Songs": "资料库歌曲",
+  "Favorite Songs": "喜爱歌曲",
   "Library Albums": "资料库专辑",
   "Recently Added": "最近添加",
   "Albums": "专辑",
@@ -30,5 +30,10 @@
   "Only songs in the Apple Music catalog play": "只能播放 Apple Music 曲库里的歌曲",
   "This song isn't available in your country or region": "你所在的国家或地区不提供这首歌",
   "The audio didn't start in time": "音频没能及时开始",
-  "This version of MyGo Music can't show Apple's sign-in page": "这个版本的 MyGo Music 不能显示 Apple 的登录页面"
+  "This version of MyGo Music can't show Apple's sign-in page": "这个版本的 MyGo Music 不能显示 Apple 的登录页面",
+  "Wrapper Address": "Wrapper 地址",
+  "For lossless: the wrapper-manager that holds your Apple Music account, such as http://127.0.0.1:8080. Songs play lossless when MyGo Music's quality is Lossless, and as AAC without a wrapper.": "用于无损音频：登录了你的 Apple Music 账户的 wrapper-manager，例如 http://127.0.0.1:8080。MyGo Music 的音质设为无损时以无损播放；没有 wrapper 时播放 AAC。",
+  "Wrapper Key": "Wrapper 密钥",
+  "The wrapper's key (API_KEY), the same one amdl uses: for a wrapper-manager on Cloudflare, or one that faces the internet. Empty for one on this computer or your network without a key.": "wrapper 的密钥（API_KEY），和 amdl 里填的是同一个：用于部署在 Cloudflare 上的 wrapper-manager，或暴露到公网的 wrapper-manager。本机或局域网里没有设密钥的留空。",
+  "Allow Apple Music to start programs in its settings, for lossless": "请在插件设置里允许 Apple Music 启动程序（用于无损音频）"
 }

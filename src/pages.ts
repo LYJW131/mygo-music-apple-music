@@ -3,7 +3,8 @@
 // by name has the ID name:<name>.
 
 import { allPages, catalog, first, me, storefront } from "./api.ts";
-import { inLibrary } from "./library.ts";
+import { kept } from "./background.ts";
+import { inLibrary, playlistFreshness } from "./library.ts";
 import { songsOf, toAlbum, toArtist, toPlaylist } from "./models.ts";
 import { prefetch, warm } from "./prefetch.ts";
 import type { Resource } from "./types/apple.ts";
@@ -52,19 +53,33 @@ export async function artist({ id }: { id: string }): Promise<ArtistPage> {
   return { artist: toArtist(item), tracks: top, albums };
 }
 
+/** One of the listener's playlists, kept until it changes. */
+export function libraryPlaylist(id: string, ahead = false): Promise<Playlist> {
+  return kept(
+    `playlist:${id}`,
+    playlistFreshness(id),
+    async (pause) => {
+      const body = await me(`/library/playlists/${id}`);
+      await pause();
+      const tracks = await allPages(`/v1/me/library/playlists/${id}/tracks`, { limit: 100 }, 5000, pause).catch(
+        (e: unknown) => {
+          if (codeOf(e) === "unavailable") return []; // an empty playlist has no tracks to find
+          throw e;
+        },
+      );
+      const songs = songsOf(tracks);
+      return { ...toPlaylist(first(body)), trackCount: songs.length, tracks: songs };
+    },
+    ahead,
+  );
+}
+
 export async function playlist({ id }: { id: string }): Promise<Playlist> {
   warm();
   if (id.startsWith("p.")) {
-    const [body, tracks] = await Promise.all([
-      me(`/library/playlists/${id}`),
-      allPages(`/v1/me/library/playlists/${id}/tracks`, { limit: 100 }, 5000).catch((e: unknown) => {
-        if (codeOf(e) === "unavailable") return []; // an empty playlist has no tracks to find
-        throw e;
-      }),
-    ]);
-    const songs = songsOf(tracks);
-    prefetch(songs);
-    return { ...toPlaylist(first(body)), trackCount: songs.length, tracks: songs };
+    const found = await libraryPlaylist(id);
+    prefetch(found.tracks ?? []);
+    return found;
   }
   const [body, own] = await Promise.all([
     catalog(`/playlists/${id}`, { include: "tracks" }),

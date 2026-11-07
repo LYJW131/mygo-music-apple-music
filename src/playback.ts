@@ -5,6 +5,7 @@
 import { request } from "./api.ts";
 import { LICENSE, PLAYBACK, UA, WIDEVINE_SYSTEM } from "./constants.ts";
 import { ffmpeg } from "./ffmpeg.ts";
+import { losslessStream } from "./lossless.ts";
 import { needAccount } from "./session.ts";
 import type { LicenseBody, WebPlaybackBody } from "./types/apple.ts";
 import type { Stream } from "./types/music.ts";
@@ -171,8 +172,10 @@ export function resolve(id: string): Promise<Resolved> {
 }
 
 // ffmpeg takes the encryption off as the audio comes in from Apple, and
-// answers the one request the app makes for it on this machine, as a
-// fragmented MP4 the app plays as it arrives. The audio is copied as it is.
+// answers the one request the app makes for it on this machine, as ADTS the
+// app plays as it arrives. The audio is copied as it is. A fragmented MP4 from
+// ffmpeg says nothing of its length, and MyGo 0.1.22 reads one through before
+// it plays; ADTS it takes its length for from the song's duration.
 // The app keeps what it fetched in its own cache. No more than a few wait at
 // a time, for songs skipped before the app asked for them.
 
@@ -195,9 +198,7 @@ async function serve(media: string, key: string): Promise<string> {
     "-decryption_key", key,
     "-i", media,
     "-map", "0:a:0", "-c", "copy",
-    "-movflags", "+empty_moov+default_base_moof+frag_keyframe",
-    "-frag_duration", "500000",
-    "-f", "mp4",
+    "-f", "adts",
     "-listen", "1", `http://127.0.0.1:${port}/`,
   ]);
   proc.closeStdin();
@@ -226,8 +227,18 @@ async function serve(media: string, key: string): Promise<string> {
   return `http://127.0.0.1:${port}/`;
 }
 
-export async function stream({ id }: { id: string }): Promise<Stream> {
+// The quality the app asked for last, kept: what the songs played next, and
+// those worked out ahead, will want.
+let wanted: string | null = null;
+export const wantedQuality = (): string => (wanted ??= host.storage.get<string>("quality") ?? "");
+
+export async function stream({ id, quality }: { id: string; quality?: string }): Promise<Stream> {
   if (!isCatalogID(id)) throw fail("unavailable", t("Only songs in the Apple Music catalog play"));
+  if ((quality ?? "") !== wantedQuality()) host.storage.set("quality", (wanted = quality ?? ""));
+  if (quality === "lossless") {
+    const lossless = await losslessStream(id);
+    if (lossless) return lossless;
+  }
   needAccount();
   let song = await resolve(id);
   let url: string;
@@ -240,5 +251,5 @@ export async function stream({ id }: { id: string }): Promise<Stream> {
     song = await resolve(id);
     url = await serve(song.media, song.key);
   }
-  return { url, type: "m4a", quality: "high", bitRate: 256000 };
+  return { url, type: "aac", quality: "high", bitRate: 256000 };
 }

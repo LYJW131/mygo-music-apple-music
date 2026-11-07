@@ -1,7 +1,7 @@
 {
   "id": "apple-music",
   "name": "Apple Music",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "minAppVersion": "0.1.21",
   "main": "index.js",
   "playback": "stream",
@@ -14,8 +14,21 @@
       "*.itunes.apple.com",
       "*.mzstatic.com"
     ],
-    "process": ["ffmpeg", "/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg"]
+    "process": ["ffmpeg", "/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg", "bin/amhelper", "bin/amhelper.exe"]
   },
+  "settings": [
+    {
+      "key": "wrapper",
+      "label": "Wrapper Address",
+      "help": "For lossless: the wrapper-manager that holds your Apple Music account, such as http://127.0.0.1:8080. Songs play lossless when MyGo Music's quality is Lossless, and as AAC without a wrapper.",
+      "link": "https://github.com/LYJW131/mygo-music-apple-music#lossless"
+    },
+    {
+      "key": "wrapperKey",
+      "label": "Wrapper Key",
+      "help": "The wrapper's key (API_KEY), the same one amdl uses: for a wrapper-manager on Cloudflare, or one that faces the internet. Empty for one on this computer or your network without a key."
+    }
+  ],
   "navigation": [
     {
       "builtin": "home",
@@ -27,7 +40,7 @@
       "icon": "chart"
     },
     {
-      "title": "Library Songs",
+      "title": "Favorite Songs",
       "builtin": "liked"
     },
     {

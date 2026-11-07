@@ -1,79 +1,53 @@
 # Apple Music for MyGo Music
 
-在 [MyGo Music](https://github.com/egoist/mygo-music) 里听 Apple Music：完整歌曲（不是 30 秒试听），256 kbps AAC。仅供有 Apple Music 订阅的个人收听，与 Apple 无关；用的是 music.apple.com 网页播放器的接口，Apple 改接口时可能失效。
+在 [MyGo Music](https://github.com/egoist/mygo-music) 里搜索和播放，音质默认为 256 kbps AAC，可选至高 24-bit/192 kHz ALAC 高解析度无损支持（配置方法[见下文](#lossless)）。
 
-[English](#english)
+[English](README.en.md)
 
-## 安装
+## 安装和使用
 
-1. 点 [mygo-music://install-plugin?repo=LYJW131/mygo-music-apple-music](mygo-music://install-plugin?repo=LYJW131/mygo-music-apple-music)，或在「设置 → 插件 → +」里粘贴 `https://github.com/LYJW131/mygo-music-apple-music`。
-2. 安装 [ffmpeg](https://ffmpeg.org)，并在「设置 → 插件」里允许 Apple Music 启动程序。它只会启动 ffmpeg，位置限定为 PATH、`/opt/homebrew/bin` 或 `/usr/local/bin`。
+1. 打开 MyGo Music，在「设置 → 插件 → `+`」里粘贴 `https://github.com/LYJW131/mygo-music-apple-music`。
+2. 来源选择 **Apple Music**。
+3. 点登录，使用有效订阅的 Apple 账户登录。
 
-   ```bash
-   brew install ffmpeg            # macOS
-   winget install Gyan.FFmpeg     # Windows（装完重启 MyGo Music）
-   sudo pacman -S ffmpeg          # Arch；其他发行版用各自的包管理器
-   ```
+## 功能
 
-3. 登录：点登录会打开 music.apple.com，在上面登录 Apple ID。
+- 首页推荐、最近播放、电台、资料库专辑、资料库歌单、最近添加。
+- 把歌曲添加到个人收藏。
+- 添加内容到资料库、从资料库中移除。
+- 新建歌单、在歌单中添加曲目。
+- 完整歌词支持，有逐字时间的按字显示，显示翻译。账户显示你的 Apple Music 名称和头像。
+- 可选的无损支持，未设置或获取失败时自动回退到 AAC
 
-需要 MyGo Music 0.1.21 及以上。
+<a id="lossless"></a>
 
-## 能做什么
+## 播放无损/高解析度无损音频
 
-- **不登录**：搜索歌曲、专辑、艺人和歌单，搜索联想，粘贴 music.apple.com 链接，专辑、艺人、歌单页，排行榜。未登录时按美国（us）的曲库浏览。
-- **登录后**：播放完整歌曲；首页推荐和最近播放；资料库歌曲、资料库专辑、资料库歌单、最近添加；把歌曲添加到个人收藏（同时添加到资料库）；把专辑和歌单添加到资料库或从资料库中删除；新建歌单、往自己的歌单里加歌；你的电台和最近播放的电台；歌词，有逐字时间的按字显示，有你语言的翻译时一并显示。
+### 原理
 
-## 播放是怎么做的
+需要一个 `wrapper`，登录可用订阅账户。插件自带的 `amhelper` 拿到密钥模板后，在本机边下载边解密，交给 MyGo Music 播放。
 
-Apple 网页播放器播放的 AAC 用 Widevine 加密。插件像网页播放器一样向 Apple 的许可证服务器要这首歌的密钥：许可证请求由插件里用 TypeScript 写的 Widevine CDM 生成和解析（不依赖任何原生库），设备是 [apple-music-downloader](https://github.com/LYJW131/apple-music-downloader) 附带的 L3 测试设备。然后 ffmpeg 一边从 Apple 下载一边去掉加密，把音频原样复制（不重新编码）成分片 MP4，在本机交给 MyGo 边下边播。不需要 wrapper，也不播放无损 ALAC 和杜比全景声。
+### 设置
 
-每首歌的音频地址和密钥都不会变，第一次播放后就记下来（最多 3000 首，只占几百 KB）：
+1. 部署一个 wrapper-manager（见下表）并登录你的 Apple Music 账户（不一定要与应用中的账户一致，但地区不同时有可能无法获取对应音轨流和密钥）。
+2. 在「设置 → 插件 → Apple Music」里填 **Wrapper 地址**，wrapper 放在要密钥的网关后面时再填 **Wrapper 密钥**。
+3. 把 MyGo Music 的音质设为**无损**。
 
-- 播过的歌，包括重启之后，约 0.2 秒出声，不再问 Apple；
-- 打开专辑、歌单、艺人页或搜索歌曲时，前 3 首会先准备好，点下去也是约 0.2–0.4 秒；为了不让账户像机器一样狂要许可证，每分钟最多准备 15 首，一次一首；
-- 其他没准备过的新歌约 1.2–1.5 秒，大部分是在等 Apple 的 webPlayback（约 0.3 秒）和许可证服务器（约 0.6 秒）；
-- 按顺序播放时，MyGo 会在当前这首播放时提前取下一首，切歌没有等待。
+| 你的情况                                                            | 怎么部署                                                                                                                                                                                                  |
+| ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 已经在用 [AMDL](https://github.com/AMDL-Web/apple-music-downloader) | 直接用 AMDL 运行的 wrapper（`amdl wrapper install` 或桌面版设置引导装的那个），地址在 AMDL 的设置里                                                                                                       |
+| Linux x86_64 电脑或服务器                                           | [wrapper-manager](https://github.com/AMDL-Web/wrapper/tree/amdl/manager) 原生运行或用 Docker，默认端口 8080                                                                                               |
+| macOS、Windows、Linux arm64、群晖等                                 | wrapper-manager 的 [QEMU 版本](https://github.com/AMDL-Web/wrapper/tree/amdl/manager#run-on-any-os-via-qemu-wrapper-manager-qemu)，需要硬件虚拟化                                                         |
+| 部署在 Cloudflare                                                   | [一键部署](https://github.com/AMDL-Web/wrapper/tree/amdl/cloudflare)到 Cloudflare Containers（需要 Workers 付费计划），部署时设置的 `API_KEY` 填进 **Wrapper 密钥**；中国大陆需要给 Worker 绑定自己的域名 |
+
+- 一个 wrapper-manager 最多登录 10 个账户，按歌曲所在的国家或地区选账户。
+- 能访问 wrapper 端口的人都能使用你的账户，不要把没有密钥保护的 wrapper 暴露到公网。
 
 ## 隐私
 
-media-user-token 以明文保存在本机这个插件的数据目录里，只发给 Apple。退出登录只会删掉本机保存的这份。
+- media-user-token 以**明文形式**保存在个插件数据目录里，只发给 Apple，退出登录只删本机。
+- Wrapper 密钥保存在插件设置里，只发给设置的 wrapper 地址。`amhelper` 只监听本机，要带随机路径才能访问；它在插件数据目录里缓存解密密钥和歌曲信息。
 
 ## 许可证
 
-AGPL-3.0，与 MyGo Music 相同，见 [LICENSE](LICENSE)。
-
-## 开发
-
-源码是 `src/` 下的 TypeScript，用 esbuild 打包成一个不依赖其他文件的 `index.js`（MyGo Music 只加载一个文件），放在 `dist/plugin`。需要 Node 22.18+。
-
-```bash
-npm install
-npm run build             # 打包到 dist/plugin；把这个文件夹复制进 MyGo 的插件目录就能试
-npm test                  # 打包，然后测试：Widevine 用到的密码学（对照 Node 自带的实现）、歌词和链接解析、打包结果能否像 MyGo 那样加载
-npm run check             # 类型检查、格式检查、测试、打成发布用的 zip；CI 跑的就是这个
-npm run test:live         # 不登录，用真实接口测搜索、专辑、艺人、歌单和排行榜
-APPLE_MUSIC_TOKEN_FILE=path/to/token npm run test:signed-in   # 登录后：账户、播放（解密并完整解码一遍）、歌词、资料库、电台
-```
-
-发布：改 `plugin.json` 里的 `version`，推到 `main`，再给这个提交打 `v<版本号>` 的 tag 并推上去。**Release** workflow 会检查 tag 和版本号一致、提交在 `main` 上，跑完检查后发布带 zip 的 release。MyGo Music 安装的是最新 release 里的 zip。
-
----
-
-## English
-
-Apple Music in [MyGo Music](https://github.com/egoist/mygo-music): whole songs (not 30-second previews) as 256 kbps AAC. For personal listening with an Apple Music subscription; not affiliated with Apple. It uses the music.apple.com web player's API and may stop working when that changes.
-
-**Install** with [mygo-music://install-plugin?repo=LYJW131/mygo-music-apple-music](mygo-music://install-plugin?repo=LYJW131/mygo-music-apple-music) (MyGo Music 0.1.21 or later). Install [ffmpeg](https://ffmpeg.org) and allow Apple Music to start programs in Settings > Plugins: it only starts ffmpeg. Sign in on music.apple.com in the window the app shows.
-
-**Signed out**: search songs, albums, artists and playlists, suggestions, pasted music.apple.com links, album, artist and playlist pages, and charts, from the US catalog.
-
-**Signed in**: whole songs; recommendations and recently played on Home; library songs, albums and playlists, recently added; favoriting songs (which adds them to the library); adding albums and playlists to the library and removing them; creating playlists and adding songs to your own; your station and recent stations; lyrics, word by word where Apple has them, with a translation into your language when there is one.
-
-**How it plays**: the web player's AAC is encrypted with Widevine. The plugin asks Apple's license server for the song's key as the web player does, with a Widevine CDM written in TypeScript inside the plugin, with no native code (the device is the L3 test device that apple-music-downloader ships). ffmpeg then takes the encryption off as the audio comes in from Apple and hands it to the app on this machine as a fragmented MP4, copied as it is, not re-encoded, which plays as it arrives. No wrapper; no ALAC or Dolby Atmos. A song's audio and key never change, so they're kept once it has played: a song played before (even after a restart) starts in about 0.2 seconds. The first 3 songs of an album, playlist, artist or song search you open are made ready the same way before you pick one, at most 15 a minute, one at a time. Other new songs take about 1.2–1.5 seconds, most of it Apple's servers answering. The app fetches the next song in the queue while the current one plays.
-
-**Privacy**: the media-user-token is kept unencrypted in the plugin's data on this machine and is only sent to Apple. Signing out forgets it here.
-
-## License
-
-AGPL-3.0, the same as MyGo Music. See [LICENSE](LICENSE).
+[AGPL-3.0](LICENSE)，无损部分实现基于 [apple-music-downloader](https://github.com/AMDL-Web/apple-music-downloader)、[wrapper](https://github.com/WorldObservationLog/wrapper) 和 [Temari](https://github.com/WorldObservationLog/Temari)。仅供有 Apple Music 订阅的个人收听，与 Apple 无关；使用 music.apple.com 网页播放器接口，Apple 改接口时可能失效。

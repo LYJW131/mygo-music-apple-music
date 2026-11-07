@@ -62,13 +62,16 @@ test("speaks the listener's language", async () => {
   await assert.rejects(() => api.stream({ id: "i.abc" }), /只能播放 Apple Music 曲库里的歌曲/);
 });
 
-test("plugin.json and the locales ship, and every text has its Chinese", async () => {
+test("plugin.json and the locales ship, and every text and setting has its Chinese", async () => {
   const manifest = JSON.parse(await readFile(join(dist, "plugin.json"), "utf8"));
   assert.equal(manifest.main, "index.js");
   const locale = JSON.parse(await readFile(join(dist, "locales/zh-CN.json"), "utf8")) as Record<string, string>;
   const source = await readFile(join(dist, "index.js"), "utf8");
   const texts = [...source.matchAll(/\bt\(\s*"((?:[^"\\]|\\.)*)"\s*,?\s*\)/g)].map((m) => JSON.parse(`"${m[1]}"`));
   const titles = (manifest.navigation as { title?: string }[]).map((n) => n.title).filter(Boolean);
+  const settings = (manifest.settings as { label: string; help?: string }[]).flatMap((s) => [s.label, s.help]);
   assert.ok(texts.length > 20);
-  for (const text of [...texts, ...titles]) assert.ok(locale[text], `no Chinese for ${JSON.stringify(text)}`);
+  for (const text of [...texts, ...titles, ...settings].filter(Boolean)) {
+    assert.ok(locale[text!], `no Chinese for ${JSON.stringify(text)}`);
+  }
 });

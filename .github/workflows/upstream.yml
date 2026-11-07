@@ -1,0 +1,220 @@
+name: Upstream
+
+# When MyGo Music releases, Claude checks what the release means for the
+# plugin (scripts/upstream-watch.ts), and lyjw131[bot] comments the report on
+# the open Automation issue whose body starts with MARKER. Each comment's first
+# line records the release it checked; the next run starts from there, and a
+# release that failed isn't retried on its own.
+on:
+  schedule:
+    - cron: "23 * * * *"
+  workflow_dispatch:
+    inputs:
+      target:
+        description: MyGo tag to check (default its latest release; given, it's checked even if it was before)
+        default: ""
+      base:
+        description: Tag to compare with (default the last one checked)
+        default: ""
+      plugin_ref:
+        description: Plugin commit or tag to check (default the one this runs from)
+        default: ""
+      comment:
+        description: Comment on the tracking issue
+        type: boolean
+        default: true
+
+permissions: {}
+
+concurrency:
+  group: upstream
+  cancel-in-progress: false
+
+env:
+  UPSTREAM: egoist/mygo-music
+  MARKER: "<!-- mygo-upstream -->"
+  # At most this many automatic runs a day. A release past it waits, and is
+  # checked with the next ones; a run by hand isn't counted or held back.
+  DAILY_RUNS: 3
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: read
+    outputs:
+      base: ${{ steps.detect.outputs.base }}
+      target: ${{ steps.detect.outputs.target }}
+      issue: ${{ steps.detect.outputs.issue }}
+    steps:
+      - id: detect
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_TARGET: ${{ inputs.target }}
+          INPUT_BASE: ${{ inputs.base }}
+        run: |
+          repo="repos/$GITHUB_REPOSITORY"
+          issue=$(gh api "$repo/issues?labels=Automation&state=open&per_page=100" --jq "[.[] | select(.pull_request == null and ((.body // \"\") | startswith(\"$MARKER\")))][0].number // empty")
+          [ -n "$issue" ] || { echo "::error::No open Automation issue whose body starts with $MARKER"; exit 1; }
+          target=${INPUT_TARGET:-$(gh release view -R "$UPSTREAM" --json tagName --jq .tagName)}
+          comments=$(gh api --paginate "$repo/issues/$issue/comments?per_page=100" \
+            --jq '.[] | select(.user.login == "lyjw131[bot]") | "\(.created_at) \(.body | split("\n")[0])"' | tr -d '\r')
+          marks=$(sed -n 's/^[^ ]* <!-- mygo-upstream \(checked\|failed\) \([^ ]*\)\( auto\)\? -->$/\1 \2/p' <<<"$comments")
+          # By version, not by date: a run by hand on an older release doesn't
+          # move the next automatic one back.
+          checked=$(grep '^checked ' <<<"$marks" | cut -d ' ' -f 2 | sort -V | tail -n 1 || true)
+          if [ -z "$INPUT_TARGET" ] && [ "$(cut -d ' ' -f 2 <<<"$marks" | grep -cxF "$target")" != 0 ]; then
+            echo "$target was looked at already."
+            exit 0
+          fi
+          if [ -z "$INPUT_TARGET" ] && [ -n "$checked" ] && [ "$(printf '%s\n' "$checked" "$target" | sort -V | tail -n 1)" = "$checked" ]; then
+            echo "$target is older than $checked, checked already."
+            exit 0
+          fi
+          today=$(awk -v since="$(date -u -d '24 hours ago' +%FT%TZ)" '$1 >= since && $2 == "<!--" && $(NF - 1) == "auto"' <<<"$comments" | wc -l)
+          if [ -z "$INPUT_TARGET" ] && [ "$today" -ge "$DAILY_RUNS" ]; then
+            echo "::notice::$today runs in the last 24 hours; $target waits."
+            exit 0
+          fi
+          # The first run starts from the release before.
+          base=${INPUT_BASE:-$checked}
+          base=${base:-$(gh release list -R "$UPSTREAM" -L 100 --exclude-drafts --exclude-pre-releases --json tagName --jq '.[].tagName' | sed -n "/^$target\$/{n;p;q}")}
+          [ -n "$base" ] && [ "$base" != "$target" ] || { echo "::error::Nothing to compare $target with (base '$base')"; exit 1; }
+          echo "Checking $base..$target"
+          { echo "base=$base"; echo "target=$target"; echo "issue=$issue"; } >> "$GITHUB_OUTPUT"
+
+  analyze:
+    needs: detect
+    if: needs.detect.outputs.target != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    # No GitHub token that writes: the model runs commands, and its report is
+    # posted by the publish job.
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      report: ${{ steps.watch.outputs.report }}
+      failure: ${{ steps.watch.outputs.failure }}
+      usage: ${{ steps.watch.outputs.usage }}
+    env:
+      BASE: ${{ needs.detect.outputs.base }}
+      TARGET: ${{ needs.detect.outputs.target }}
+      MYGO: ${{ github.workspace }}-mygo
+      PLUGIN: ${{ github.workspace }}-plugin
+      PLUGIN_REF: ${{ inputs.plugin_ref }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      # The plugin checked can be another commit than the harness that checks it.
+      - name: Check out the plugin to check
+        run: git worktree add -q --detach "$PLUGIN" "${PLUGIN_REF:-HEAD}"
+      - name: Clone MyGo
+        run: |
+          git clone -q --filter=blob:none "https://github.com/$UPSTREAM" "$MYGO"
+          git -C "$MYGO" checkout -q "$TARGET"
+          git -C "$MYGO" rev-parse --verify -q "$BASE^{commit}" > /dev/null
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      # MyGo's Go is the newer, and builds amhelper too.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: ${{ env.MYGO }}/go.mod
+          cache: false
+      - name: Release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for tag in $(git -C "$MYGO" tag --merged "$TARGET" --contains "$BASE" --sort=version:refname); do
+            [ "$tag" = "$BASE" ] && continue
+            printf '## %s\n\n' "$tag"
+            gh release view "$tag" -R "$UPSTREAM" --json body --jq .body || echo "(no release)"
+            printf '\n'
+          done > "$RUNNER_TEMP/notes.md"
+      # bubblewrap keeps the model's commands from reading the job's OIDC
+      # request token. Ubuntu's AppArmor doesn't let it make namespaces unless
+      # it's allowed by name.
+      - name: Install bubblewrap, ffmpeg and xvfb
+        run: |
+          sudo timeout -k 10 300 sh -c 'apt-get update -qq && apt-get install -y -qq --no-install-recommends bubblewrap ffmpeg xvfb ripgrep > /dev/null'
+          if [ "$(sysctl -n kernel.apparmor_restrict_unprivileged_userns 2>/dev/null)" = 1 ]; then
+            printf '%s\n' 'abi <abi/4.0>,' 'include <tunables/global>' 'profile bwrap /usr/bin/bwrap flags=(unconfined) {' '  userns,' '}' | sudo tee /etc/apparmor.d/bwrap > /dev/null
+            sudo apparmor_parser -r /etc/apparmor.d/bwrap
+          fi
+          bwrap --ro-bind / / --dev /dev --proc /proc --unshare-pid --die-with-parent true
+      - run: npm ci
+      - name: Build the plugin as released, with amhelper
+        working-directory: ${{ env.PLUGIN }}
+        run: npm ci && npm run build && npm run helper --if-present
+      # The fake wrapper and CDN the model plays lossless with, from the
+      # harness's own tree: the plugin checked may predate it.
+      - name: Build fakeapple
+        working-directory: helper
+        run: go build -o "$RUNNER_TEMP/bin/fakeapple" ./cmd/fakeapple
+      - name: Download MyGo's modules
+        working-directory: ${{ env.MYGO }}
+        run: go mod download
+      - id: watch
+        continue-on-error: true
+        timeout-minutes: 50
+        env:
+          ANTHROPIC_FEDERATION_RULE_ID: fdrl_01TcnHP5cpnHL7zamom7TTPA
+          ANTHROPIC_ORGANIZATION_ID: 5ac99a46-8fcf-4cb2-99b8-83382c7ce79b
+          ANTHROPIC_SERVICE_ACCOUNT_ID: svac_019MQwpMmtiie8FXrsF26fG5
+          ANTHROPIC_WORKSPACE_ID: wrkspc_01EKGUJQbX9gKyF1ohp8WmUo
+        run: >-
+          node scripts/upstream-watch.ts --plugin "$PLUGIN" --upstream "$MYGO" --base "$BASE" --target "$TARGET"
+          --notes "$RUNNER_TEMP/notes.md" --fakeapple "$RUNNER_TEMP/bin/fakeapple" --out "$RUNNER_TEMP/watch" --minutes 30 --dollars 5
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: upstream-watch-${{ env.TARGET }}
+          path: ${{ runner.temp }}/watch
+          if-no-files-found: ignore
+          retention-days: 30
+
+  publish:
+    needs: [detect, analyze]
+    if: always() && needs.detect.outputs.target != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - name: Write the comment
+        env:
+          REPORT: ${{ needs.analyze.outputs.report }}
+          FAILURE: ${{ needs.analyze.outputs.failure }}
+          USAGE: ${{ needs.analyze.outputs.usage }}
+          BASE: ${{ needs.detect.outputs.base }}
+          TARGET: ${{ needs.detect.outputs.target }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          AUTO: ${{ github.event_name == 'schedule' }}
+        run: |
+          node scripts/upstream-watch/comment.ts > "$RUNNER_TEMP/comment.md"
+          cat "$RUNNER_TEMP/comment.md" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        if: github.event_name == 'schedule' || inputs.comment
+        id: app
+        with:
+          client-id: Iv23liSmKTDKh0bxIfzB
+          private-key: ${{ secrets.BOT_PRIVATE_KEY }}
+          permission-issues: write
+      - name: Comment as lyjw131[bot]
+        if: github.event_name == 'schedule' || inputs.comment
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          ISSUE: ${{ needs.detect.outputs.issue }}
+        run: gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/comment.md"

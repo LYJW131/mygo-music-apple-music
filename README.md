@@ -43,6 +43,10 @@
 - 一个 wrapper-manager 最多登录 10 个账户，按歌曲所在的国家或地区选账户。
 - 能访问 wrapper 端口的人都能使用你的账户，不要把没有密钥保护的 wrapper 暴露到公网。
 
+## 跟随 MyGo Music 更新
+
+MyGo Music 发新版本后，会有一个自动化流程检查这个版本是否影响插件：Claude 阅读上游改动、实际运行测试，然后在[跟踪 issue](https://github.com/LYJW131/mygo-music-apple-music/issues/2) 里写下结论（无需更新、可选更新、需要更新或已失效）。需要改的会尽快跟进并发布插件新版本，MyGo 会提示你更新。
+
 ## 隐私
 
 - media-user-token 以**明文形式**保存在个插件数据目录里，只发给 Apple，退出登录只删本机。

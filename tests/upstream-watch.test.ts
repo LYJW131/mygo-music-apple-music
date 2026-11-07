@@ -29,6 +29,11 @@ test("the comment starts with the marker the workflow reads back", () => {
   assert.equal(render(report, { ...run, auto: true }).split("\n")[0], "<!-- mygo-upstream checked v0.1.22 auto -->");
 });
 
+test("the comment says which plugin it checked", () => {
+  const body = render(report, { ...run, plugin: { ref: "a".repeat(40), url: "https://example.com/tree/x" } });
+  assert.match(body, /检查的插件版本：\[`aaaaaaa`\]\(https:\/\/example\.com\/tree\/x\)/);
+});
+
 test("nothing the model writes can forge a marker or mention someone", () => {
   const body = render(report, run);
   assert.equal(body.match(/<!--/g)?.length, 1);

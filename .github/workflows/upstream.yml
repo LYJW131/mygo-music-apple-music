@@ -202,6 +202,8 @@ jobs:
           TARGET: ${{ needs.detect.outputs.target }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           AUTO: ${{ github.event_name == 'schedule' }}
+          PLUGIN_REF: ${{ inputs.plugin_ref || github.sha }}
+          PLUGIN_URL: ${{ github.server_url }}/${{ github.repository }}/tree/${{ inputs.plugin_ref || github.sha }}
         run: |
           node scripts/upstream-watch/comment.ts > "$RUNNER_TEMP/comment.md"
           cat "$RUNNER_TEMP/comment.md" >> "$GITHUB_STEP_SUMMARY"

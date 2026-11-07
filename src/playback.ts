@@ -171,8 +171,11 @@ export function resolve(id: string): Promise<Resolved> {
 }
 
 // ffmpeg takes the encryption off as the audio comes in from Apple, and
-// answers the one request the app makes for it on this machine, as a
-// fragmented MP4 the app plays as it arrives. The audio is copied as it is.
+// answers the one request the app makes for it on this machine, as ADTS the
+// app plays as it arrives. The audio is copied as it is. Not as a fragmented
+// MP4: one written as it goes has no length in it, and MyGo Music 0.1.22
+// reads all of such a file before playing it; ADTS it plays at once, its
+// length the track's.
 // The app keeps what it fetched in its own cache. No more than a few wait at
 // a time, for songs skipped before the app asked for them.
 
@@ -195,9 +198,7 @@ async function serve(media: string, key: string): Promise<string> {
     "-decryption_key", key,
     "-i", media,
     "-map", "0:a:0", "-c", "copy",
-    "-movflags", "+empty_moov+default_base_moof+frag_keyframe",
-    "-frag_duration", "500000",
-    "-f", "mp4",
+    "-f", "adts",
     "-listen", "1", `http://127.0.0.1:${port}/`,
   ]);
   proc.closeStdin();
@@ -240,5 +241,5 @@ export async function stream({ id }: { id: string }): Promise<Stream> {
     song = await resolve(id);
     url = await serve(song.media, song.key);
   }
-  return { url, type: "m4a", quality: "high", bitRate: 256000 };
+  return { url, type: "aac", quality: "high", bitRate: 256000 };
 }

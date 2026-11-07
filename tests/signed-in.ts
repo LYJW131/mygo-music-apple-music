@@ -30,7 +30,7 @@ await step("account", async () => JSON.stringify(await api.account()));
 await step("stream", async () => {
   const s = await api.stream({ id, quality: "high" });
   const body = Buffer.from(await (await fetch(s.url)).arrayBuffer());
-  const path = join(mkdtempSync(join(tmpdir(), "apple-")), "song.m4a");
+  const path = join(mkdtempSync(join(tmpdir(), "apple-")), "song.aac");
   writeFileSync(path, body);
   const probe = execFileSync("ffprobe", [
     "-v",

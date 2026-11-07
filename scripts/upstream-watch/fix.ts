@@ -15,7 +15,7 @@ export const FIX_SCHEMA = {
   required: ["subject", "body", "summary"],
   properties: {
     subject: text(
-      "The commit's subject, which is also the pull request's title: Conventional Commits as the plugin's CLAUDE.md says, in English, lower case, no full stop, at most 72 characters. Say what changes and for which MyGo Music release, so it reads clearly in a list, e.g. `fix(playback): serve AAC as ADTS for MyGo Music 0.1.22`.",
+      "The commit's subject, which is also the pull request's title: Conventional Commits as the plugin's CLAUDE.md says, in English, lower case, no full stop, at most 72 characters. Say what changes and for which MyGo Music release, so it reads clearly in a list, e.g. `fix(lyrics): send word timings as MyGo Music 0.3.0 reads them`.",
     ),
     body: text(
       "The commit body, in English: what changed and why, in plain sentences, wrapped at 72 columns. No trailers; they are added.",

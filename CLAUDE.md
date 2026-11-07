@@ -72,6 +72,10 @@ The bundle runs in MyGo's moejs runtime, not Node:
 - Comments say why, in plain sentences. Keep the existing tone.
 - Never print or commit a media-user-token or developer token. Signed-in tests read the token from a file.
 - `plugin.json` holds the version; `package.json` has none.
+- Commits follow Conventional Commits, in English: `type(scope): summary` (types `feat`, `fix`, `perf`, `docs`,
+  `test`, `build`, `ci`, `chore`; scopes such as `lossless`, `playback`, `library`, `helper`), lower case, no full
+  stop. The body says what changed and why in plain sentences, wrapped at 72. Sign off (`git commit -s`), and end
+  with the `Co-Authored-By` trailer.
 
 ## Releasing
 

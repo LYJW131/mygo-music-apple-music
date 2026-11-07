@@ -5,6 +5,7 @@
 import { request } from "./api.ts";
 import { LICENSE, PLAYBACK, UA, WIDEVINE_SYSTEM } from "./constants.ts";
 import { ffmpeg } from "./ffmpeg.ts";
+import { losslessStream } from "./lossless.ts";
 import { needAccount } from "./session.ts";
 import type { LicenseBody, WebPlaybackBody } from "./types/apple.ts";
 import type { Stream } from "./types/music.ts";
@@ -226,8 +227,18 @@ async function serve(media: string, key: string): Promise<string> {
   return `http://127.0.0.1:${port}/`;
 }
 
-export async function stream({ id }: { id: string }): Promise<Stream> {
+// The quality the app asked for last, kept: what the songs played next, and
+// those worked out ahead, will want.
+let wanted: string | null = null;
+export const wantedQuality = (): string => (wanted ??= host.storage.get<string>("quality") ?? "");
+
+export async function stream({ id, quality }: { id: string; quality?: string }): Promise<Stream> {
   if (!isCatalogID(id)) throw fail("unavailable", t("Only songs in the Apple Music catalog play"));
+  if ((quality ?? "") !== wantedQuality()) host.storage.set("quality", (wanted = quality ?? ""));
+  if (quality === "lossless") {
+    const lossless = await losslessStream(id);
+    if (lossless) return lossless;
+  }
   needAccount();
   let song = await resolve(id);
   let url: string;

@@ -76,6 +76,7 @@ export interface ArtistPage {
 export interface Account {
   id: string;
   name: string;
+  imageUrl?: string;
 }
 
 export type SearchKind = "tracks" | "albums" | "artists" | "playlists";

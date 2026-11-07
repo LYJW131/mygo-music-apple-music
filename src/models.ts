@@ -1,6 +1,7 @@
 // What Apple calls things, as the app calls them.
 
 import { art, playlistArt } from "./artwork.ts";
+import { noteAudio } from "./lossless.ts";
 import type { Resource } from "./types/apple.ts";
 import type { Album, Artist, Playlist, Station, Track } from "./types/music.ts";
 import { isCatalogID } from "./util.ts";
@@ -28,6 +29,7 @@ const byName = (name: string): Artist => ({ id: `name:${name}`, name });
 export function toTrack(item: Resource): Track {
   const a = item.attributes ?? {};
   const id = songID(item);
+  if (item.type === "songs") noteAudio(id, a);
   const artistName = a.artistName ?? "";
   const artists = [{ id: artistIdOf(item) || `name:${artistName}`, name: artistName }];
   return {

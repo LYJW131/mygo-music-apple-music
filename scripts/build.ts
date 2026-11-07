@@ -11,7 +11,7 @@ export const root = join(import.meta.dirname, "..");
 export const out = join(root, "dist/plugin");
 
 /** What ships beside index.js. */
-const files = ["plugin.json", "locales", "README.md", "LICENSE"];
+const files = ["plugin.json", "locales", "README.md", "README.en.md", "LICENSE"];
 
 export async function buildPlugin(): Promise<void> {
   await rm(out, { recursive: true, force: true });

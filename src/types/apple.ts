@@ -35,6 +35,12 @@ export interface Attributes {
   value?: number;
   ttml?: string;
   ttmlLocalizations?: string;
+  /** Such as lossless, hi-res-lossless, atmos. */
+  audioTraits?: string[];
+  /** An account's picture, at /v1/me/account. */
+  avatarArtwork?: Artwork;
+  /** With extend=extendedAssetUrls. */
+  extendedAssetUrls?: { enhancedHls?: string };
 }
 
 export interface Relationship {

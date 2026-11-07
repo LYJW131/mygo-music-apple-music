@@ -70,8 +70,17 @@ export async function request<T = Body>(
 export const api = <T = Body>(path: string, params?: Params, options?: RequestOptions) =>
   request<T>(AMP + path + query(params), options);
 
+/**
+ * Apple's catalog, in the listener's storefront. The songs in it come with
+ * the address of their lossless master playlist, which a song played lossless
+ * starts from (lossless.ts).
+ */
 export async function catalog<T = Body>(path: string, params?: Params, options?: RequestOptions) {
-  return api<T>(`/v1/catalog/${await storefront()}${path}`, params, options);
+  return api<T>(
+    `/v1/catalog/${await storefront()}${path}`,
+    { "extend[songs]": "extendedAssetUrls", ...params },
+    options,
+  );
 }
 
 /** The listener's own: their library, ratings and recommendations. */

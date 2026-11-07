@@ -3,7 +3,7 @@
 // the model hands in for it, and the commit message and pull request made from
 // that.
 
-import { clean } from "./report.ts";
+import { clean, upstreamRefs } from "./report.ts";
 
 export type Fix = { subject: string; body: string; summary: string };
 
@@ -59,9 +59,9 @@ export function modelName(id: string): string {
 
 // The models that wrote it are its co-authors, and no one else: the commit is
 // lyjw131[bot]'s, and lyjw reviews it.
-export function commitMessage(fix: Fix, models: string[]): string {
+export function commitMessage(fix: Fix, models: string[], upstream: string): string {
   const authors = [...new Set(models.map(modelName))].map((name) => `Co-Authored-By: ${name} <noreply@anthropic.com>`);
-  return `${fix.body.replace(/\r/g, "").trim()}\n\n${authors.join("\n")}`;
+  return `${upstreamRefs(fix.body.replace(/\r/g, "").trim(), upstream)}\n\n${authors.join("\n")}`;
 }
 
 export type Context = {
@@ -76,7 +76,7 @@ export type Context = {
 export function pullBody(fix: Fix, c: Context): string {
   const release = (tag: string) => `[${tag}](https://github.com/${c.upstream}/releases/tag/${tag})`;
   const lines = [
-    clean(fix.summary),
+    upstreamRefs(clean(fix.summary), c.upstream),
     "",
     "---",
     "",

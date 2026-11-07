@@ -79,7 +79,12 @@ test("the commit is co-authored by the models that wrote it, and no one else", (
   assert.equal(modelName("claude-opus-5-5"), "Claude Opus 5.5");
   assert.equal(modelName("claude-opus-4-5-20251101"), "Claude Opus 4.5");
   assert.equal(modelName("anthropic/claude-opus-5-5"), "Claude Opus 5.5");
-  const message = commitMessage(fix, ["claude-opus-5-5", "claude-opus-5-5", "claude-opus-5"]);
+  const message = commitMessage(
+    { ...fix, body: "As #68 did, see a/b#3 and x.com/y#4." },
+    ["claude-opus-5-5", "claude-opus-5-5", "claude-opus-5"],
+    "egoist/mygo-music",
+  );
+  assert.match(message, /^As egoist\/mygo-music#68 did, see a\/b#3 and x.com\/y#4\./);
   assert.equal(
     message.split("\n\n").at(-1),
     "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>",
@@ -88,7 +93,8 @@ test("the commit is co-authored by the models that wrote it, and no one else", (
 });
 
 test("the pull request's description mentions no one", () => {
-  const body = pullBody(fix, { ...run, verdict: "需要更新" });
+  const body = pullBody({ ...fix, summary: "改了 (#68)" }, { ...run, verdict: "需要更新" });
+  assert.match(body, /改了 \(egoist\/mygo-music#68\)/);
   assert.doesNotMatch(body, /@egoist/);
   assert.match(body, /需要更新/);
 });

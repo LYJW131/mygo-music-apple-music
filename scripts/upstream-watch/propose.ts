@@ -76,7 +76,7 @@ try {
         input: {
           branch: { repositoryNameWithOwner: repo, branchName: branch },
           expectedHeadOid: fix.base,
-          message: { headline: fix.subject.trim(), body: commitMessage(fix, fix.models) },
+          message: { headline: fix.subject.trim(), body: commitMessage(fix, fix.models, env("UPSTREAM")) },
           fileChanges: changes,
         },
       },

@@ -27,7 +27,8 @@ const target = env("TARGET");
 const branch = `upstream/mygo-${target}`;
 const VERDICT_TEXT: Record<string, string> = { needed: "需要更新", breaking: "已有功能失效，必须更新" };
 
-async function github<T>(method: string, path: string, body?: unknown, allow404 = false): Promise<T | null> {
+// missing: a missing ref answers 404 to some calls and 422 to a DELETE.
+async function github<T>(method: string, path: string, body?: unknown, missing = false): Promise<T | null> {
   const res = await fetch(`https://api.github.com/${path}`, {
     method,
     headers: {
@@ -39,7 +40,7 @@ async function github<T>(method: string, path: string, body?: unknown, allow404 
     body: body ? JSON.stringify(body) : undefined,
     signal: AbortSignal.timeout(30_000),
   });
-  if (allow404 && res.status === 404) return null;
+  if (missing && (res.status === 404 || res.status === 422)) return null;
   const text = await res.text();
   if (!res.ok) throw new Error(`${method} ${path}: ${res.status} ${text.slice(0, 300)}`);
   const json = text ? (JSON.parse(text) as T & { errors?: { message: string }[] }) : null;

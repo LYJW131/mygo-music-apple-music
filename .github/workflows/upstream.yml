@@ -6,6 +6,8 @@ name: Upstream
 # line records the release it checked; the next run starts from there, and a
 # release that failed isn't retried on its own.
 on:
+  push:
+    branches: [upstream-watch]
   schedule:
     - cron: "23 * * * *"
   workflow_dispatch:
@@ -49,8 +51,8 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          INPUT_TARGET: ${{ inputs.target }}
-          INPUT_BASE: ${{ inputs.base }}
+          INPUT_TARGET: ${{ github.event_name == 'push' && 'v0.1.22' || inputs.target }}
+          INPUT_BASE: ${{ github.event_name == 'push' && 'v0.1.21' || inputs.base }}
         run: |
           repo="repos/$GITHUB_REPOSITORY"
           issue=$(gh api "$repo/issues?labels=Automation&state=open&per_page=100" --jq "[.[] | select(.pull_request == null and ((.body // \"\") | startswith(\"$MARKER\")))][0].number // empty")

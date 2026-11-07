@@ -8,6 +8,7 @@
 // /<secret>/ until its stdin closes:
 //
 //	GET /<secret>/status               the wrapper's {ready, regions}
+//	POST /<secret>/wake                wakes the wrapper (one on Cloudflare sleeps)
 //	GET /<secret>/prepare/<id>         resolves the song and fetches its keys
 //	GET /<secret>/song/<id>.m4a        the song, decrypted, as fragmented MP4
 //
@@ -81,6 +82,7 @@ func main() {
 	prefix := "/" + hex.EncodeToString(secret)
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET "+prefix+"/status", s.status)
+	mux.HandleFunc("POST "+prefix+"/wake", s.wake)
 	mux.HandleFunc("GET "+prefix+"/prepare/{id}", s.prepare)
 	mux.HandleFunc("GET "+prefix+"/song/{file}", s.song)
 	go func() { log.Fatal(http.Serve(l, mux)) }()
@@ -120,6 +122,10 @@ func (s *server) status(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	reply(w, http.StatusOK, st)
+}
+
+func (s *server) wake(w http.ResponseWriter, _ *http.Request) {
+	reply(w, http.StatusOK, map[string]bool{"woke": s.wrapper.wake()})
 }
 
 // request is what prepare and song are asked: the song and how to find it.

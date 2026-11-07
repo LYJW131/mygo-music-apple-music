@@ -234,6 +234,22 @@ export function warmLossless(): void {
   if (hasWrapper() && !missing) running().catch(() => {});
 }
 
+// A wrapper on Cloudflare sleeps after five idle minutes, and the song that
+// wakes it waits for its container to start. So while the listener is about,
+// amhelper asks it something now and then (it knows when it last did), and
+// the first song finds it up.
+const WAKE_EVERY = 60 * 1000;
+let wokeAt = 0;
+
+/** Wakes the wrapper ahead of the songs, if it's going to be wanted. */
+export function wakeWrapper(): void {
+  if (!hasWrapper() || missing || Date.now() - wokeAt < WAKE_EVERY) return;
+  wokeAt = Date.now();
+  running()
+    .then((h) => fetch(`${h.base}/wake`, { method: "POST" }))
+    .catch(() => {});
+}
+
 /**
  * The song as ALAC, or null when it should play as AAC: no wrapper, no
  * amhelper for this platform, no ALAC of it, or the wrapper failing.

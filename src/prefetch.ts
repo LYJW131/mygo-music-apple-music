@@ -2,7 +2,7 @@
 
 import { UA } from "./constants.ts";
 import { ffmpeg } from "./ffmpeg.ts";
-import { hasWrapper, prepare, preparedOrPreparing, warmLossless } from "./lossless.ts";
+import { hasWrapper, prepare, preparedOrPreparing, wakeWrapper, warmLossless } from "./lossless.ts";
 import { resolve, resolvedOrResolving, wantedQuality } from "./playback.ts";
 import { signedIn } from "./session.ts";
 import type { Track } from "./types/music.ts";
@@ -17,6 +17,11 @@ let warmed = 0;
 
 // Lossless when the app last asked for it and there's a wrapper to ask.
 const lossless = () => wantedQuality() === "lossless" && hasWrapper();
+
+/** Wakes the wrapper while the listener is about, when songs play lossless. */
+export function wake(): void {
+  if (lossless()) wakeWrapper();
+}
 
 export function warm(): void {
   if (lossless()) warmLossless();

@@ -7,10 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/LYJW131/mygo-music-apple-music/helper/internal/fairplay"
@@ -29,6 +31,9 @@ type wrapper struct {
 	mu        sync.Mutex
 	templates *lru[*fairplay.Template]
 	inflight  map[string]*templateCall
+
+	// When the wrapper was last asked something /status isn't, in Unix ns.
+	asked atomic.Int64
 }
 
 type templateCall struct {
@@ -74,6 +79,7 @@ func (w *wrapper) call(ctx context.Context, endpoint string, query url.Values) (
 			return nil, err
 		}
 		defer release()
+		w.asked.Store(time.Now().UnixNano())
 	}
 	if w.token != "" {
 		req.Header.Set("Authorization", "Bearer "+w.token)
@@ -202,6 +208,37 @@ func (w *wrapper) template(ctx context.Context, adamID, key string) (*fairplay.T
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
+}
+
+// awake is how long a wrapper stays up after a request. A wrapper-manager on
+// Cloudflare sleeps after five idle minutes, and the request that wakes it
+// waits for the container to start and its accounts to be restored: some
+// seconds, which the listener's first song shouldn't spend.
+const awake = 4 * time.Minute
+
+// wake asks the wrapper for the key every track opens with, unless it was
+// asked something within awake, and reports whether it did. On Cloudflare
+// that starts the container while the listener browses; /status wouldn't, as
+// the gateway answers it from its cache. The answer is kept, fresh.
+func (w *wrapper) wake() bool {
+	last := w.asked.Load()
+	if time.Since(time.Unix(0, last)) < awake || !w.asked.CompareAndSwap(last, time.Now().UnixNano()) {
+		return false
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		t, raw, err := w.fetchTemplate(ctx, "0", prefetchKey)
+		if err != nil {
+			log.Printf("waking the wrapper: %v", err)
+			return
+		}
+		w.mu.Lock()
+		w.templates.put(prefetchKey, t)
+		w.mu.Unlock()
+		w.store.putKey(prefetchKey, raw)
+	}()
+	return true
 }
 
 // forget drops key's template, which decrypted to noise, from memory and

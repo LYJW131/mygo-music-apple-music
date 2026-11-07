@@ -19,17 +19,19 @@ import * as lib from "./library.ts";
 import * as ly from "./lyrics.ts";
 import * as pg from "./pages.ts";
 import * as pb from "./playback.ts";
+import { wake } from "./prefetch.ts";
 import * as se from "./search.ts";
 import * as st from "./stations.ts";
 import { stopWarming, warmLibrary } from "./warmup.ts";
 
 // The app's ask, which also starts fetching the library ahead, once it's
-// quiet. Only the app's one object of parameters is passed on: a second
+// quiet, and wakes the wrapper for lossless. Only the app's one object of parameters is passed on: a second
 // argument tells a function it works in the background.
 function asked<P, R>(fn: (params: P) => R | Promise<R>): (params: P) => Promise<R> {
   const call = foreground(fn);
   return (params: P) => {
     warmLibrary();
+    wake();
     return call(params);
   };
 }

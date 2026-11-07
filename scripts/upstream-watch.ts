@@ -37,11 +37,12 @@ const { values: args } = parseArgs({
     effort: { type: "string", default: "medium" },
     minutes: { type: "string", default: "30" },
     dollars: { type: "string", default: "5" },
+    fakeapple: { type: "string", default: "fakeapple" },
   },
 });
 if (!args.upstream || !args.base || !args.target || !args.out) {
   console.error(
-    "usage: upstream-watch.ts --upstream DIR --base TAG --target TAG --out DIR [--notes FILE] [--plugin DIR]",
+    "usage: upstream-watch.ts --upstream DIR --base TAG --target TAG --out DIR [--notes FILE] [--plugin DIR] [--fakeapple PATH]",
   );
   process.exit(2);
 }
@@ -60,7 +61,16 @@ const upstream = resolve(args.upstream);
 const out = resolve(args.out);
 mkdirSync(out, { recursive: true });
 const scratch = mkdtempSync(join(process.env.RUNNER_TEMP ?? tmpdir(), "watch-"));
-const places: Places = { plugin, upstream, scratch, base: args.base, target: args.target, minutes, dollars };
+const places: Places = {
+  plugin,
+  upstream,
+  scratch,
+  base: args.base,
+  target: args.target,
+  minutes,
+  dollars,
+  fakeapple: args.fakeapple!,
+};
 
 const started = Date.now();
 const bwrap = hasBwrap();

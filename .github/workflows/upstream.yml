@@ -149,6 +149,11 @@ jobs:
       - name: Build the plugin as released, with amhelper
         working-directory: ${{ env.PLUGIN }}
         run: npm ci && npm run build && npm run helper --if-present
+      # The fake wrapper and CDN the model plays lossless with, from the
+      # harness's own tree: the plugin checked may predate it.
+      - name: Build fakeapple
+        working-directory: helper
+        run: go build -o "$RUNNER_TEMP/bin/fakeapple" ./cmd/fakeapple
       - name: Download MyGo's modules
         working-directory: ${{ env.MYGO }}
         run: go mod download
@@ -162,7 +167,7 @@ jobs:
           ANTHROPIC_WORKSPACE_ID: wrkspc_01EKGUJQbX9gKyF1ohp8WmUo
         run: >-
           node scripts/upstream-watch.ts --plugin "$PLUGIN" --upstream "$MYGO" --base "$BASE" --target "$TARGET"
-          --notes "$RUNNER_TEMP/notes.md" --out "$RUNNER_TEMP/watch" --minutes 30 --dollars 5
+          --notes "$RUNNER_TEMP/notes.md" --fakeapple "$RUNNER_TEMP/bin/fakeapple" --out "$RUNNER_TEMP/watch" --minutes 30 --dollars 5
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
@@ -197,14 +202,14 @@ jobs:
           node scripts/upstream-watch/comment.ts > "$RUNNER_TEMP/comment.md"
           cat "$RUNNER_TEMP/comment.md" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
-        if: github.event_name != 'workflow_dispatch' || inputs.comment
+        if: github.event_name == 'schedule' || inputs.comment
         id: app
         with:
           client-id: Iv23liSmKTDKh0bxIfzB
           private-key: ${{ secrets.BOT_PRIVATE_KEY }}
           permission-issues: write
       - name: Comment as lyjw131[bot]
-        if: github.event_name != 'workflow_dispatch' || inputs.comment
+        if: github.event_name == 'schedule' || inputs.comment
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
           ISSUE: ${{ needs.detect.outputs.issue }}

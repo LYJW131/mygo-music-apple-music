@@ -54,6 +54,8 @@ and tests amhelper.
   `scripts/upstream-watch/report.ts` turns its report into a comment by lyjw131[bot] on the open Automation issue.
   Commands run under bubblewrap only to keep the job's OIDC request token from them. Breakers: 30 minutes and $5 a
   run (then it is told to hand in; past 1.5 times either it stops), and 3 automatic runs a day.
+  `helper/cmd/fakeapple` stands in for a wrapper and Apple's CDN (Temari's published sample, looped), so amhelper
+  runs end to end without an account.
 - Types: `src/types/host.d.ts` (the global `host`), `music.ts` (what MyGo takes), `apple.ts` (what Apple answers).
 
 ## Runtime constraints

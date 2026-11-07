@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -71,6 +72,9 @@ func TestResolveTrackPicksTheBestALACWithinLimits(t *testing.T) {
 		}
 		if tr.MediaURL != srv.URL+"/a/song_m.mp4" {
 			t.Errorf("media %s", tr.MediaURL)
+		}
+		if math.Abs(tr.Seconds-29.86666) > 1e-9 {
+			t.Errorf("%v s, want the segments' 29.86666", tr.Seconds)
 		}
 		if !slices.Equal(tr.Keys, []string{prefetchKey, "skd://itunes.apple.com/p1480208481/c6"}) {
 			t.Errorf("keys %q", tr.Keys)

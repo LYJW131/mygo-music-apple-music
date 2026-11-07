@@ -64,7 +64,7 @@ func TestDecryptStreamSplitsAndDecrypts(t *testing.T) {
 	var out bytes.Buffer
 	flushes := 0
 	keys := map[int]sampleDecrypter{1: xorDecrypter(0x5a), 2: xorDecrypter(0xa5)}
-	err := decryptStream(bytes.NewReader(in), &out, func(desc int, _ bool) (sampleDecrypter, error) { return keys[desc], nil }, nil,
+	err := decryptStream(bytes.NewReader(in), &out, 2.5, func(desc int, _ bool) (sampleDecrypter, error) { return keys[desc], nil }, nil,
 		func() { flushes++ })
 	if err != nil {
 		t.Fatal(err)
@@ -72,6 +72,13 @@ func TestDecryptStreamSplitsAndDecrypts(t *testing.T) {
 	f, err := mp4.DecodeFile(bytes.NewReader(out.Bytes()))
 	if err != nil {
 		t.Fatal(err)
+	}
+	// The length, which the header of Apple's file leaves at 0.
+	if mdhd := f.Init.Moov.Trak.Mdia.Mdhd; mdhd.Duration != uint64(2.5*float64(mdhd.Timescale)) {
+		t.Errorf("mdhd says %d of %d, want 2.5 s", mdhd.Duration, mdhd.Timescale)
+	}
+	if mvhd := f.Init.Moov.Mvhd; mvhd.Duration != uint64(2.5*float64(mvhd.Timescale)) {
+		t.Errorf("mvhd says %d of %d, want 2.5 s", mvhd.Duration, mvhd.Timescale)
 	}
 	if n := len(f.Init.Moov.Trak.Mdia.Minf.Stbl.Stsd.Children); n != 1 {
 		t.Errorf("%d sample entries, want 1", n)
@@ -115,7 +122,7 @@ func TestDecryptStreamSplitsAndDecrypts(t *testing.T) {
 
 func TestDecryptStreamRejectsTruncatedMedia(t *testing.T) {
 	in, _ := appleLike(t)
-	err := decryptStream(bytes.NewReader(in[:len(in)-100]), &bytes.Buffer{},
+	err := decryptStream(bytes.NewReader(in[:len(in)-100]), &bytes.Buffer{}, 0,
 		func(int, bool) (sampleDecrypter, error) { return xorDecrypter(1), nil }, nil, func() {})
 	if err == nil {
 		t.Fatal("a cut-off file decrypted without an error")
@@ -149,7 +156,7 @@ func TestDecryptStreamReplacesAWrongKey(t *testing.T) {
 		return true
 	}
 	var out bytes.Buffer
-	if err := decryptStream(bytes.NewReader(in), &out, keyOf, isPlain, func() {}); err != nil {
+	if err := decryptStream(bytes.NewReader(in), &out, 0, keyOf, isPlain, func() {}); err != nil {
 		t.Fatal(err)
 	}
 	if asked[1] != 0 || asked[2] != 1 {
@@ -177,7 +184,7 @@ func TestDecryptStreamReplacesAWrongKey(t *testing.T) {
 
 func TestDecryptStreamFailsWhenTheKeyStaysWrong(t *testing.T) {
 	in, _ := appleLike(t)
-	err := decryptStream(bytes.NewReader(in), &bytes.Buffer{},
+	err := decryptStream(bytes.NewReader(in), &bytes.Buffer{}, 0,
 		func(int, bool) (sampleDecrypter, error) { return xorDecrypter(0x33), nil },
 		func([][]byte) bool { return false }, func() {})
 	if err == nil {

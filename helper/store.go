@@ -106,6 +106,7 @@ type keptTrack struct {
 	SampleRate int       `json:"rate"`
 	BitDepth   int       `json:"bits"`
 	Bandwidth  int       `json:"bandwidth"`
+	Seconds    float64   `json:"seconds,omitempty"`
 	At         time.Time `json:"at"`
 }
 
@@ -125,7 +126,7 @@ func (s *store) tracks() map[string]cachedTrack {
 	}
 	for k, t := range kept {
 		if time.Since(t.At) < trackTTL && t.MediaURL != "" && len(t.Keys) > 0 {
-			out[k] = cachedTrack{track{MediaURL: t.MediaURL, Keys: t.Keys, SampleRate: t.SampleRate, BitDepth: t.BitDepth, Bandwidth: t.Bandwidth}, t.At}
+			out[k] = cachedTrack{track{MediaURL: t.MediaURL, Keys: t.Keys, SampleRate: t.SampleRate, BitDepth: t.BitDepth, Bandwidth: t.Bandwidth, Seconds: t.Seconds}, t.At}
 		}
 	}
 	return out
@@ -149,7 +150,7 @@ func (s *store) saveTracks(all func() map[string]cachedTrack) {
 		s.mu.Unlock()
 		kept := map[string]keptTrack{}
 		for k, c := range all() {
-			kept[k] = keptTrack{c.t.MediaURL, c.t.Keys, c.t.SampleRate, c.t.BitDepth, c.t.Bandwidth, c.at}
+			kept[k] = keptTrack{c.t.MediaURL, c.t.Keys, c.t.SampleRate, c.t.BitDepth, c.t.Bandwidth, c.t.Seconds, c.at}
 		}
 		raw, err := json.Marshal(kept)
 		if err == nil {

@@ -359,7 +359,7 @@ func (s *server) song(w http.ResponseWriter, r *http.Request) {
 	flusher, _ := w.(http.Flusher)
 	headers := time.Since(start)
 	var firstAudio time.Duration
-	err = decryptStream(bufio.NewReaderSize(res.Body, 1<<20), w, func(desc int, fresh bool) (sampleDecrypter, error) {
+	err = decryptStream(bufio.NewReaderSize(res.Body, 1<<20), w, t.Seconds, func(desc int, fresh bool) (sampleDecrypter, error) {
 		// Apple's sample descriptions are 1-based and keyed in playlist order;
 		// one past the keys gets the first, as amdl does.
 		i := desc - 1

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"runtime"
 	"sync"
 
@@ -29,12 +30,14 @@ type keySource func(desc int, fresh bool) (sampleDecrypter, error)
 // then the samples decrypted with the key of their sample description, a
 // second of them to a fragment. Apple's fragments are 15 seconds, 5 MB of
 // Hi-Res, which the app would wait for whole before it could play the first.
-// flush is called after each fragment.
+// flush is called after each fragment. seconds, if known, is written into
+// the header as the track's length: MyGo (0.1.22 on) reads a fragmented file
+// that doesn't say it all through before it plays, to find out.
 //
 // check, if not nil, is asked whether the first samples each key decrypts
 // came out right (decryptsALAC); when not, keyOf is asked for the key again,
 // fresh, and the samples are decrypted anew before any of them is written.
-func decryptStream(r io.Reader, w io.Writer, keyOf keySource, check func([][]byte) bool, flush func()) error {
+func decryptStream(r io.Reader, w io.Writer, seconds float64, keyOf keySource, check func([][]byte) bool, flush func()) error {
 	init, _, err := readInitSegment(r, 0)
 	if err != nil {
 		return fmt.Errorf("read init segment: %w", err)
@@ -61,6 +64,12 @@ func decryptStream(r io.Reader, w io.Writer, keyOf keySource, check func([][]byt
 	}
 	if err := prepareInit(init); err != nil {
 		return err
+	}
+	if seconds > 0 {
+		trak.Mdia.Mdhd.Duration = uint64(math.Round(seconds * float64(trak.Mdia.Mdhd.Timescale)))
+		if mvhd := init.Moov.Mvhd; mvhd != nil {
+			mvhd.Duration = uint64(math.Round(seconds * float64(mvhd.Timescale)))
+		}
 	}
 	if err := init.Encode(w); err != nil {
 		return err

@@ -24,6 +24,8 @@ type track struct {
 	SampleRate int      `json:"sampleRate"`
 	BitDepth   int      `json:"bitDepth"`
 	Bandwidth  int      `json:"bandwidth"`
+	// Seconds is how long it plays, from its media playlist; 0 unknown.
+	Seconds float64 `json:"-"`
 }
 
 var errNoALAC = errors.New("the song has no ALAC")
@@ -64,11 +66,11 @@ func resolveTrack(ctx context.Context, client *http.Client, masterURL string, ma
 	if err != nil {
 		return track{}, err
 	}
-	mediaURL, keys, err := parseMedia(media, best.uri)
+	mediaURL, keys, seconds, err := parseMedia(media, best.uri)
 	if err != nil {
 		return track{}, err
 	}
-	return track{MediaURL: mediaURL, Keys: keys, SampleRate: best.sampleRate, BitDepth: best.bitDepth, Bandwidth: best.bandwidth}, nil
+	return track{MediaURL: mediaURL, Keys: keys, SampleRate: best.sampleRate, BitDepth: best.bitDepth, Bandwidth: best.bandwidth, Seconds: seconds}, nil
 }
 
 func getText(ctx context.Context, client *http.Client, u string) (string, error) {
@@ -119,14 +121,22 @@ func parseMaster(body, base string) []variant {
 	return out
 }
 
-// parseMedia returns the media file and its keys: the prefetch key, which
-// opens every track, then ALAC's (c23) or the shared one (c6).
-func parseMedia(body, base string) (string, []string, error) {
+// parseMedia returns the media file, its keys (the prefetch key, which
+// opens every track, then ALAC's (c23) or the shared one (c6)) and how long
+// it plays: its segments' lengths add up to within a frame of it.
+func parseMedia(body, base string) (string, []string, float64, error) {
 	keys := []string{prefetchKey}
 	mediaURL := ""
+	seconds := 0.0
 	sc := bufio.NewScanner(strings.NewReader(body))
 	for sc.Scan() {
 		line := strings.TrimSpace(sc.Text())
+		if v, ok := strings.CutPrefix(line, "#EXTINF:"); ok {
+			v, _, _ = strings.Cut(v, ",")
+			if f, err := strconv.ParseFloat(strings.TrimSpace(v), 64); err == nil && f > 0 {
+				seconds += f
+			}
+		}
 		if strings.HasPrefix(line, "#EXT-X-KEY:") {
 			key := parseAttrs(strings.TrimPrefix(line, "#EXT-X-KEY:"))["URI"]
 			if strings.HasPrefix(key, "skd://") && (strings.HasSuffix(key, "c23") || strings.HasSuffix(key, "c6")) {
@@ -140,9 +150,9 @@ func parseMedia(body, base string) (string, []string, error) {
 		}
 	}
 	if mediaURL == "" {
-		return "", nil, errors.New("the playlist names no media file")
+		return "", nil, 0, errors.New("the playlist names no media file")
 	}
-	return mediaURL, keys, sc.Err()
+	return mediaURL, keys, seconds, sc.Err()
 }
 
 func parseAttrs(v string) map[string]string {

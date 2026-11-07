@@ -41,6 +41,8 @@ const { values: args } = parseArgs({
     out: { type: "string" },
     model: { type: "string", default: "claude-opus-5-5" },
     effort: { type: "string", default: "medium" },
+    // fast: Opus 5.5's fast mode, at twice the price.
+    speed: { type: "string", default: "standard" },
     minutes: { type: "string", default: "30" },
     dollars: { type: "string", default: "5" },
     fakeapple: { type: "string", default: "fakeapple" },
@@ -58,6 +60,8 @@ if (!args.upstream || !args.base || !args.target || !args.out) {
 const EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
 const effort = args.effort as (typeof EFFORTS)[number];
 if (!EFFORTS.includes(effort)) throw new Error(`--effort is one of ${EFFORTS.join(", ")}`);
+const fast = args.speed === "fast";
+if (!fast && args.speed !== "standard") throw new Error("--speed is standard or fast");
 // Breakers, for the check and then the fix: past the soft limits the model is
 // told to hand in what it has; past the hard ones, half as much again, that
 // phase stops without it.
@@ -308,9 +312,10 @@ log({ system: systemText, first: messages[0]!.content });
 
 const totals = { input: 0, cacheWrite: 0, cacheRead: 0, output: 0 };
 let turns = 0;
-// Claude Opus 5.5's prices per million tokens.
+// Claude Opus 5.5's prices per million tokens; fast mode doubles them.
 const spent = () =>
-  (totals.input * 4 + totals.cacheWrite * 5 + totals.cacheRead * 0.2 + totals.output * 20) / 1_000_000;
+  ((fast ? 2 : 1) * (totals.input * 4 + totals.cacheWrite * 5 + totals.cacheRead * 0.2 + totals.output * 20)) /
+  1_000_000;
 
 type Phase = {
   // What it ends with, in the model's words and in lyjw's.
@@ -345,6 +350,7 @@ async function converse(phase: Phase): Promise<void> {
         messages,
         thinking: { type: "adaptive", display: "summarized" },
         output_config: { effort },
+        ...(fast ? { speed: "fast" as const } : {}),
         // Each turn resends the whole conversation: caching the end of it
         // makes the next turn read all but its newest part from the cache.
         cache_control: { type: "ephemeral" },
@@ -463,7 +469,7 @@ if (args.fix && (verdict === "needed" || verdict === "breaking")) {
 const cost = spent();
 const usage: Usage = {
   model: args.model!,
-  effort,
+  effort: fast ? `${effort}, fast` : effort,
   minutes: Math.round((Date.now() - started) / 6000) / 10,
   turns,
   toolCalls,

@@ -30,7 +30,7 @@ This is where a release can break it:
 
 1. The plugin contract: plugin.json's fields (id, main, version, settings, programs, navigation, locales), the functions a plugin exports and the shapes they take and return (internal/music), error codes, the \`host\` global (storage, settings, fetch, running programs, translation), how plugins are found, loaded, installed and updated (.origin.json, a release's zips, the checks on paths).
 2. The JavaScript runtime the plugin runs in (moejs): which globals exist and how they behave (fetch, timers, TextEncoder, BigInt, atob, promises).
-3. Playback: \`stream\` answers {url, type, quality, bitRate}. AAC is ADTS that ffmpeg serves on 127.0.0.1; lossless is ALAC in fragmented MP4 that amhelper serves, with the length in mdhd and mvhd. MyGo's internal/player opens, decodes, seeks and times these, and picks the quality to ask for.
+3. Playback: what \`stream\` answers ({url, type, quality, bitRate}) and the media behind the url, which the plugin makes itself (ffmpeg, and amhelper for lossless when the plugin has it; read its code for the container, codec and headers it writes at this commit). MyGo's internal/player opens, decodes, seeks and times that media as it arrives, and picks the quality to ask for.
 4. What the app shows from the plugin: navigation, titles, tracks, albums, artwork, lyrics, settings and their help text, errors.
 5. What MyGo newly offers that the plugin could take up (new exports, fields, capabilities). These are "optional".
 
@@ -41,7 +41,7 @@ This is where a release can break it:
 - Prove what you can by running it, at the new version and, where it helps to compare, the old one (git worktree add in ${p.scratch}). Ways that work:
   - \`go test ./internal/plugin/ ./internal/player/\` in MyGo.
   - A Go test of your own in MyGo's tree (say internal/plugin/zz_watch_test.go) that Load()s ${p.plugin}/dist/plugin the way demo_test.go loads examples/demo-plugin, and calls exports through the real host: signed-out calls like search and album reach Apple.
-  - Media in the plugin's formats through MyGo's decoders: ADTS from \`ffmpeg -f lavfi -i sine=d=20 -c:a aac -f adts\`, a fragmented ALAC MP4 from amhelper's own tests (helper/), opened the way the app opens a stream; check that length, seeking and the end come out right.
+  - Media made exactly as the plugin makes it (its own ffmpeg arguments on a \`-f lavfi -i sine\` source, amhelper's output), through MyGo's decoders, opened the way the app opens a stream, at the new version and the old: check that it starts as it arrives, and that length, seeking and the end come out right.
   - MyGo itself, built from its tree and run under xvfb-run with the plugin in its plugins folder, when only the real app can show something (its README and AGENTS.md say how it builds). It's slow; weigh it against the cheaper checks.
   - \`npm test\` in the plugin.
 

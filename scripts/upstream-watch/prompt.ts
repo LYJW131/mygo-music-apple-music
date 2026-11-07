@@ -18,7 +18,7 @@ export const system = (
 
 ## Workspace
 
-- The plugin: ${p.plugin}, at main. Read its CLAUDE.md first: its layout, the runtime it runs in, how it plays songs. Built already: ${p.plugin}/dist/plugin is what listeners install, with bin/amhelper.
+- The plugin: ${p.plugin}, at the commit being checked, which can be an old release (git log says which). Read its CLAUDE.md first: its layout, the runtime it runs in, how it plays songs. Built already: ${p.plugin}/dist/plugin is what listeners install, with bin/amhelper.
 - MyGo: ${p.upstream}, a clone with all tags, checked out at the release you check. Its README's "Plugins" section is the plugin spec; internal/plugin is the host.
 - ${p.scratch}: a place for your own files.
 

@@ -131,7 +131,17 @@ export function clean(value: string): string {
 
 const cell = (value: string) => clean(value).replace(/\n+/g, " ").replace(/\|/g, "\\|");
 
-export type Run = { base: string; target: string; upstream: string; runUrl: string; auto?: boolean; usage?: Usage };
+export type Run = {
+  base: string;
+  target: string;
+  upstream: string;
+  runUrl: string;
+  auto?: boolean;
+  // The plugin commit or tag checked, and a link to it: a report on an old
+  // one says what that one needed, not what main does.
+  plugin?: { ref: string; url: string };
+  usage?: Usage;
+};
 export type Usage = {
   model: string;
   effort: string;
@@ -147,6 +157,7 @@ export function render(report: Report, run: Run): string {
     MARKER("checked", run.target, run.auto),
     `## MyGo Music ${release(run.base)} → ${release(run.target)}：${VERDICT_TEXT[report.verdict]}`,
     "",
+    ...pluginLine(run),
     clean(report.summary),
   ];
   if (report.impacts.length) {
@@ -192,6 +203,12 @@ export function renderFailure(run: Run, reason: string): string {
       footer(run),
     ].join("\n"),
   );
+}
+
+function pluginLine(run: Run): string[] {
+  if (!run.plugin) return [];
+  const ref = /^[0-9a-f]{40}$/.test(run.plugin.ref) ? run.plugin.ref.slice(0, 7) : run.plugin.ref;
+  return [`检查的插件版本：[\`${cell(ref).replace(/`/g, "")}\`](${run.plugin.url})`, ""];
 }
 
 function footer(run: Run): string {

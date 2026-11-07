@@ -8,7 +8,7 @@
 import { spawn, spawnSync } from "node:child_process";
 
 const SECRET =
-  /TOKEN|KEY|SECRET|PASSWORD|CREDENTIAL|^ACTIONS_|^GITHUB_(OUTPUT|ENV|PATH|STEP_SUMMARY|STATE)$|^RUNNER_TRACKING/i;
+  /TOKEN|KEY|SECRET|PASSWORD|CREDENTIAL|^ANTHROPIC_|^ACTIONS_|^GITHUB_(OUTPUT|ENV|PATH|STEP_SUMMARY|STATE)$|^RUNNER_TRACKING/i;
 
 export function childEnv(env: NodeJS.ProcessEnv, tmp: string): NodeJS.ProcessEnv {
   const out: NodeJS.ProcessEnv = {};

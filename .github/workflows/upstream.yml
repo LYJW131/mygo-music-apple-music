@@ -4,7 +4,9 @@ name: Upstream
 # plugin (scripts/upstream-watch.ts), and lyjw131[bot] comments the report on
 # the open Automation issue whose body starts with MARKER. Each comment's first
 # line records the release it checked; the next run starts from there, and a
-# release that failed isn't retried on its own.
+# release that failed isn't retried on its own. When the plugin needs a change,
+# Claude makes it, and lyjw131[bot] proposes it as a draft pull request of one
+# signed commit (scripts/upstream-watch/propose.ts).
 on:
   schedule:
     - cron: "23 * * * *"
@@ -17,10 +19,14 @@ on:
         description: Tag to compare with (default the last one checked)
         default: ""
       plugin_ref:
-        description: Plugin commit or tag to check (default the one this runs from)
+        description: Plugin branch, commit or tag to check (default the one this runs from; a draft pull request needs a branch)
         default: ""
       comment:
         description: Comment on the tracking issue
+        type: boolean
+        default: true
+      draft_pr:
+        description: When the plugin needs a change, make it and open a draft pull request
         type: boolean
         default: true
 
@@ -89,7 +95,7 @@ jobs:
     needs: detect
     if: needs.detect.outputs.target != ''
     runs-on: ubuntu-latest
-    timeout-minutes: 65
+    timeout-minutes: 95
     # No GitHub token that writes: the model runs commands, and its report is
     # posted by the publish job.
     permissions:
@@ -99,6 +105,9 @@ jobs:
       report: ${{ steps.watch.outputs.report }}
       failure: ${{ steps.watch.outputs.failure }}
       usage: ${{ steps.watch.outputs.usage }}
+      fix: ${{ steps.watch.outputs.fix }}
+      fix_failure: ${{ steps.watch.outputs.fix_failure }}
+      plugin_branch: ${{ steps.plugin.outputs.branch }}
     env:
       BASE: ${{ needs.detect.outputs.base }}
       TARGET: ${{ needs.detect.outputs.target }}
@@ -111,8 +120,20 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
       # The plugin checked can be another commit than the harness that checks it.
+      # A fix is proposed into the branch the plugin checked came from; a tag
+      # or a bare commit has none, and gets no pull request.
       - name: Check out the plugin to check
-        run: git worktree add -q --detach "$PLUGIN" "${PLUGIN_REF:-HEAD}"
+        id: plugin
+        run: |
+          if [ -z "$PLUGIN_REF" ]; then
+            git worktree add -q --detach "$PLUGIN" HEAD
+            [ "$GITHUB_REF_TYPE" = branch ] && echo "branch=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+          elif git rev-parse --verify -q "refs/remotes/origin/$PLUGIN_REF" > /dev/null; then
+            git worktree add -q --detach "$PLUGIN" "origin/$PLUGIN_REF"
+            echo "branch=$PLUGIN_REF" >> "$GITHUB_OUTPUT"
+          else
+            git worktree add -q --detach "$PLUGIN" "$PLUGIN_REF"
+          fi
       - name: Clone MyGo
         run: |
           git clone -q --filter=blob:none "https://github.com/$UPSTREAM" "$MYGO"
@@ -162,15 +183,17 @@ jobs:
         run: go mod download
       - id: watch
         continue-on-error: true
-        timeout-minutes: 50
+        timeout-minutes: 80
         env:
           ANTHROPIC_FEDERATION_RULE_ID: fdrl_01TcnHP5cpnHL7zamom7TTPA
           ANTHROPIC_ORGANIZATION_ID: 5ac99a46-8fcf-4cb2-99b8-83382c7ce79b
           ANTHROPIC_SERVICE_ACCOUNT_ID: svac_019MQwpMmtiie8FXrsF26fG5
           ANTHROPIC_WORKSPACE_ID: wrkspc_01EKGUJQbX9gKyF1ohp8WmUo
+          FIX: ${{ (github.event_name == 'schedule' || inputs.draft_pr) && steps.plugin.outputs.branch != '' }}
         run: >-
           node scripts/upstream-watch.ts --plugin "$PLUGIN" --upstream "$MYGO" --base "$BASE" --target "$TARGET"
-          --notes "$RUNNER_TEMP/notes.md" --fakeapple "$RUNNER_TEMP/bin/fakeapple" --out "$RUNNER_TEMP/watch" --minutes 30 --dollars 5
+          --notes "$RUNNER_TEMP/notes.md" --fakeapple "$RUNNER_TEMP/bin/fakeapple" --out "$RUNNER_TEMP/watch"
+          --minutes 30 --dollars 5 $([ "$FIX" = true ] && echo --fix --fix-minutes 20 --fix-dollars 5)
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
@@ -193,6 +216,32 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: needs.analyze.outputs.fix == 'true'
+        with:
+          name: upstream-watch-${{ needs.detect.outputs.target }}
+          path: ${{ runner.temp }}/watch
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        if: github.event_name == 'schedule' || inputs.comment || needs.analyze.outputs.fix == 'true'
+        id: app
+        with:
+          client-id: Iv23liSmKTDKh0bxIfzB
+          private-key: ${{ secrets.BOT_PRIVATE_KEY }}
+          permission-issues: write
+          permission-contents: write
+          permission-pull-requests: write
+      - name: Open the draft pull request as lyjw131[bot]
+        id: pull
+        if: needs.analyze.outputs.fix == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          DIR: ${{ runner.temp }}/watch
+          BASE_BRANCH: ${{ needs.analyze.outputs.plugin_branch }}
+          BASE: ${{ needs.detect.outputs.base }}
+          TARGET: ${{ needs.detect.outputs.target }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          ISSUE: ${{ needs.detect.outputs.issue }}
+        run: node scripts/upstream-watch/propose.ts
       - name: Write the comment
         env:
           REPORT: ${{ needs.analyze.outputs.report }}
@@ -204,16 +253,11 @@ jobs:
           AUTO: ${{ github.event_name == 'schedule' }}
           PLUGIN_REF: ${{ inputs.plugin_ref || github.sha }}
           PLUGIN_URL: ${{ github.server_url }}/${{ github.repository }}/tree/${{ inputs.plugin_ref || github.sha }}
+          PULL_URL: ${{ steps.pull.outputs.url }}
+          PULL_FAILURE: ${{ steps.pull.outputs.failure || needs.analyze.outputs.fix_failure }}
         run: |
           node scripts/upstream-watch/comment.ts > "$RUNNER_TEMP/comment.md"
           cat "$RUNNER_TEMP/comment.md" >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
-        if: github.event_name == 'schedule' || inputs.comment
-        id: app
-        with:
-          client-id: Iv23liSmKTDKh0bxIfzB
-          private-key: ${{ secrets.BOT_PRIVATE_KEY }}
-          permission-issues: write
       - name: Comment as lyjw131[bot]
         if: github.event_name == 'schedule' || inputs.comment
         env:

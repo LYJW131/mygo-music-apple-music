@@ -48,6 +48,13 @@ from it, decrypts the song on this machine as it downloads, and hands it to MyGo
 - A wrapper-manager holds up to 10 accounts and picks the one for the song's country or region.
 - Whoever reaches the wrapper's port can use your account: don't expose a wrapper to the internet without a key.
 
+## Keeping up with MyGo Music
+
+When MyGo Music releases, an automated check looks at what the release means for this plugin: Claude reads the
+upstream changes, runs tests, and posts its verdict (nothing to do, optional, needed, or broken) on the
+[tracking issue](https://github.com/LYJW131/mygo-music-apple-music/issues/2). What needs changing is followed up in a
+new plugin release, which MyGo offers you as an update.
+
 ## Privacy
 
 - The media-user-token is kept **unencrypted** in the plugin's data and only sent to Apple. Signing out forgets it on

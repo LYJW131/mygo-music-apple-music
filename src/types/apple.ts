@@ -30,6 +30,9 @@ export interface Attributes {
   curatorName?: string;
   trackCount?: number;
   canEdit?: boolean;
+  canDelete?: boolean;
+  hasCatalog?: boolean;
+  lastModifiedDate?: string;
   isLive?: boolean;
   title?: { stringForDisplay?: string };
   value?: number;

@@ -96,12 +96,18 @@ export function first(body: Body | null): Resource {
   return item;
 }
 
-/** Every page of a list, up to `max` items. */
-export async function allPages(path: string, params: Params, max = 1000): Promise<Resource[]> {
+/** Every page of a list, up to `max` items, calling pause between pages. */
+export async function allPages(
+  path: string,
+  params: Params,
+  max = 1000,
+  pause?: () => Promise<void>,
+): Promise<Resource[]> {
   if (path.startsWith("/v1/me")) needAccount();
   const out: Resource[] = [];
   let next: string | undefined = path + query(params);
   while (next && out.length < max) {
+    if (out.length && pause) await pause();
     const body: Body | null = await request(AMP + next);
     out.push(...(body?.data ?? []));
     next = body?.next;

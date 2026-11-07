@@ -42,6 +42,13 @@ and tests amhelper.
   arrive, `alac.go` checks a key's first samples look like ALAC (a wrong template gives noise, not an error),
   `store.go` the disk cache (templates ≤300, tracks a week; a bad template or a 404 media file is fetched again).
   `internal/fairplay` is amdl's Temari port, copied; change it there first.
+- Library ahead: `index.ts` wraps every export in `foreground` (`background.ts`), and `warmup.ts` fetches favorites,
+  saved albums, stations, recently added and the 20 playlists changed last, one request at a time, pausing while the
+  app asks for anything and a second after. Answers are `kept`: a library playlist until its `lastModifiedDate`
+  changes, the rest for 10 minutes; writes `forget` what they change. A function's second argument `ahead` marks a
+  background call; the app only ever passes one.
+- Liked is Favorite Songs, the library playlist with `canDelete: false` and no catalog version, hidden from
+  `playlists`; liking is a rating of 1.
 - Types: `src/types/host.d.ts` (the global `host`), `music.ts` (what MyGo takes), `apple.ts` (what Apple answers).
 
 ## Runtime constraints

@@ -2,11 +2,63 @@
 // playlists, and what they favorite.
 
 import { allPages, catalog, me } from "./api.ts";
+import { forget, forgetAll, kept } from "./background.ts";
 import { songsOf, toAlbum, toPlaylist } from "./models.ts";
 import { signedIn } from "./session.ts";
 import type { Resource } from "./types/apple.ts";
 import type { Album, Playlist, Track } from "./types/music.ts";
-import { fail, isCatalogID } from "./util.ts";
+import { codeOf, fail, isCatalogID } from "./util.ts";
+
+/** How long what can't tell when it changed is kept: favorites, albums, stations. */
+export const LIST_KEPT = 10 * 60 * 1000;
+
+// The listener's playlists as last listed, each with when it last changed,
+// which tells whether a playlist fetched before is still as it was.
+const changed = new Map<string, string>();
+// Favorite Songs: the playlist Apple keeps of the songs they favorite,
+// which can't be deleted and isn't in the catalog. null when there's none.
+let favoritesID: string | null | undefined;
+
+/** Forgets what was kept of the listener, who signed out or in. */
+export function forgetLibrary(): void {
+  forgetAll();
+  changed.clear();
+  favoritesID = undefined;
+}
+
+/** The listener's playlists, Favorite Songs among them, from Apple. */
+export function libraryPlaylists(ahead = false): Promise<Resource[]> {
+  // The app's own ask always goes to Apple: the list is what says what changed.
+  return kept(
+    "playlists",
+    { maxAge: ahead ? 60 * 1000 : 0 },
+    async (pause) => {
+      const lists = await allPages("/v1/me/library/playlists", { limit: 100 }, 500, pause);
+      changed.clear();
+      favoritesID = null;
+      for (const p of lists) {
+        const a = p.attributes ?? {};
+        if (a.lastModifiedDate) changed.set(p.id, a.lastModifiedDate);
+        if (a.canDelete === false && !a.hasCatalog) favoritesID = p.id;
+      }
+      return lists;
+    },
+    ahead,
+  );
+}
+
+/** How a library playlist fetched before stays good: as long as it hasn't changed. */
+export function playlistFreshness(id: string) {
+  const version = changed.get(id);
+  return version ? { version, maxAge: Infinity } : { maxAge: LIST_KEPT };
+}
+
+/** The listener's playlists by when they last changed, the latest first, but Favorite Songs. */
+export const recentlyChanged = (): string[] =>
+  [...changed.entries()]
+    .filter(([id]) => id !== favoritesID)
+    .sort((a, b) => b[1].localeCompare(a[1]))
+    .map(([id]) => id);
 
 export async function recentTracks(): Promise<Track[]> {
   const out: Track[] = [];
@@ -20,13 +72,31 @@ export async function recentTracks(): Promise<Track[]> {
 
 export const recent = (): Promise<Track[]> => recentTracks();
 
-// Liked songs are the songs in the library, newest first. Liking a song adds
-// it to the listener's favorites, as the star in Apple's apps does, and to
-// the library.
+// Liked songs are Favorite Songs, newest first, as Apple's apps list them.
+// Liking a song favorites it, as the star in Apple's apps does, which puts it
+// in Favorite Songs and the library. An account without Favorite Songs lists
+// its library's songs.
 
-export async function liked({ offset = 0 }: { offset?: number }): Promise<{ tracks: Track[]; more: boolean }> {
-  const body = await me("/library/songs", { limit: 100, offset: offset || undefined, include: "catalog" });
-  return { tracks: songsOf(body?.data), more: !!body?.next };
+export async function liked(
+  { offset = 0 }: { offset?: number },
+  ahead = false,
+): Promise<{ tracks: Track[]; more: boolean }> {
+  if (favoritesID === undefined) await libraryPlaylists(ahead);
+  const favorites = favoritesID;
+  const version = favorites ? changed.get(favorites) : undefined;
+  return kept(
+    `liked:${offset}`,
+    { version, maxAge: LIST_KEPT },
+    async () => {
+      const path = favorites ? `/library/playlists/${favorites}/tracks` : "/library/songs";
+      const body = await me(path, { limit: 100, offset: offset || undefined, include: "catalog" }).catch((e) => {
+        if (codeOf(e) === "unavailable") return null; // none yet
+        throw e;
+      });
+      return { tracks: songsOf(body?.data), more: !!body?.next };
+    },
+    ahead,
+  );
 }
 
 export async function isLiked({ ids }: { ids: string[] }): Promise<Record<string, boolean>> {
@@ -45,14 +115,27 @@ export async function like({ id, on }: { id: string; on: boolean }): Promise<voi
   if (on) {
     await me(`/ratings/songs/${id}`, null, { method: "PUT", body: { type: "rating", attributes: { value: 1 } } });
     await me("/library", { "ids[songs]": id }, { method: "POST" }).catch(() => {});
+    forget("recentlyAdded");
   } else {
     await me(`/ratings/songs/${id}`, null, { method: "DELETE" });
   }
+  forget("liked:");
+  if (favoritesID) forget(`playlist:${favoritesID}`);
 }
 
-export async function savedAlbums({ offset = 0 }: { offset?: number }): Promise<{ albums: Album[]; more: boolean }> {
-  const body = await me("/library/albums", { limit: 100, offset: offset || undefined });
-  return { albums: (body?.data ?? []).map(toAlbum), more: !!body?.next };
+export function savedAlbums(
+  { offset = 0 }: { offset?: number },
+  ahead = false,
+): Promise<{ albums: Album[]; more: boolean }> {
+  return kept(
+    `albums:${offset}`,
+    { maxAge: LIST_KEPT },
+    async () => {
+      const body = await me("/library/albums", { limit: 100, offset: offset || undefined });
+      return { albums: (body?.data ?? []).map(toAlbum), more: !!body?.next };
+    },
+    ahead,
+  );
 }
 
 /** The library's own resource for what of the catalog is in the library. */
@@ -63,6 +146,8 @@ export async function inLibrary(type: "albums" | "playlists", id: string): Promi
 }
 
 export async function saveAlbum({ id, on }: { id: string; on: boolean }): Promise<void> {
+  forget("albums:");
+  forget("recentlyAdded");
   if (on) {
     await me("/library", { "ids[albums]": id }, { method: "POST" });
     return;
@@ -72,6 +157,7 @@ export async function saveAlbum({ id, on }: { id: string; on: boolean }): Promis
 }
 
 export async function savePlaylist({ id, on }: { id: string; on: boolean }): Promise<void> {
+  forget("recentlyAdded");
   if (on) {
     await me("/library", { "ids[playlists]": id }, { method: "POST" });
     return;
@@ -80,8 +166,10 @@ export async function savePlaylist({ id, on }: { id: string; on: boolean }): Pro
   if (own) await me(`/library/playlists/${own.id}`, null, { method: "DELETE" });
 }
 
+/** The sidebar's playlists: Favorite Songs is the app's own Liked page. */
 export async function playlists(): Promise<Playlist[]> {
-  return (await allPages("/v1/me/library/playlists", { limit: 100 }, 500)).map(toPlaylist);
+  const lists = await libraryPlaylists();
+  return lists.filter((p) => p.id !== favoritesID).map(toPlaylist);
 }
 
 export async function createPlaylist({ name }: { name: string }): Promise<Playlist> {
@@ -95,4 +183,5 @@ export async function addToPlaylist({ id, trackIds }: { id: string; trackIds: st
   const data = trackIds.filter(isCatalogID).map((song) => ({ id: song, type: "songs" }));
   if (!data.length) return;
   await me(`/library/playlists/${id}/tracks`, null, { method: "POST", body: { data } });
+  forget(`playlist:${id}`);
 }

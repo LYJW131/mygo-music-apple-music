@@ -3,6 +3,7 @@
 import { me, storefront } from "./api.ts";
 import { art } from "./artwork.ts";
 import { UA, WEB } from "./constants.ts";
+import { forgetLibrary } from "./library.ts";
 import { signedIn } from "./session.ts";
 import type { Account } from "./types/music.ts";
 import { fail, t } from "./util.ts";
@@ -28,6 +29,7 @@ export async function signIn(): Promise<Account | null> {
   host.storage.set("mediaUserToken", token);
   host.storage.remove("storefront");
   host.storage.remove("profile");
+  forgetLibrary();
   return account();
 }
 
@@ -35,6 +37,7 @@ export function signOut(): void {
   host.storage.remove("mediaUserToken");
   host.storage.remove("storefront");
   host.storage.remove("profile");
+  forgetLibrary();
 }
 
 // Who's signed in, as the web player shows them: the name and picture of

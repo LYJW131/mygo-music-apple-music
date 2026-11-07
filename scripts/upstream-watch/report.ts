@@ -140,6 +140,9 @@ export type Run = {
   // The plugin commit or tag checked, and a link to it: a report on an old
   // one says what that one needed, not what main does.
   plugin?: { ref: string; url: string };
+  // The draft pull request with the fix, or why there is none.
+  pull?: string;
+  pullFailure?: string;
   usage?: Usage;
 };
 export type Usage = {
@@ -159,6 +162,7 @@ export function render(report: Report, run: Run): string {
     "",
     ...pluginLine(run),
     clean(report.summary),
+    ...pullLine(run),
   ];
   if (report.impacts.length) {
     lines.push("", "### 影响");
@@ -203,6 +207,12 @@ export function renderFailure(run: Run, reason: string): string {
       footer(run),
     ].join("\n"),
   );
+}
+
+function pullLine(run: Run): string[] {
+  if (run.pull) return ["", `**草稿 PR：${run.pull}**`];
+  if (run.pullFailure) return ["", `没生成草稿 PR：${cell(run.pullFailure)}`];
+  return [];
 }
 
 function pluginLine(run: Run): string[] {

@@ -1,0 +1,27 @@
+{
+  "name": "mygo-music-apple-music",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "scripts": {
+    "build": "node scripts/build.ts",
+    "package": "node scripts/package.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "npm run build && node --experimental-vm-modules --test tests/*.test.ts",
+    "test:live": "npm run build && node --experimental-vm-modules tests/live.ts",
+    "test:signed-in": "npm run build && node --experimental-vm-modules tests/signed-in.ts",
+    "check": "npm run typecheck && npm run format:check && npm test && npm run package"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.6",
+    "esbuild": "0.28.2",
+    "fflate": "0.8.3",
+    "prettier": "3.9.10",
+    "typescript": "7.0.2"
+  }
+}

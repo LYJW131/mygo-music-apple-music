@@ -1,0 +1,56 @@
+{
+  "id": "apple-music",
+  "name": "Apple Music",
+  "version": "0.1.0",
+  "minAppVersion": "0.1.21",
+  "main": "index.js",
+  "playback": "stream",
+  "permissions": {
+    "network": [
+      "music.apple.com",
+      "amp-api.music.apple.com",
+      "play.music.apple.com",
+      "play.itunes.apple.com",
+      "*.itunes.apple.com",
+      "*.mzstatic.com"
+    ],
+    "process": ["ffmpeg", "/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg"]
+  },
+  "navigation": [
+    {
+      "builtin": "home",
+      "title": "Home"
+    },
+    {
+      "title": "Charts",
+      "page": "charts",
+      "icon": "chart"
+    },
+    {
+      "title": "Library Songs",
+      "builtin": "liked"
+    },
+    {
+      "builtin": "savedAlbums",
+      "title": "Library Albums"
+    },
+    {
+      "title": "Recently Added",
+      "page": "recentlyAdded",
+      "icon": "album"
+    },
+    {
+      "builtin": "stations"
+    }
+  ],
+  "requestHeaders": [
+    {
+      "hosts": ["*.mzstatic.com"],
+      "kinds": ["image"],
+      "headers": {
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15",
+        "referer": "https://music.apple.com/"
+      }
+    }
+  ]
+}

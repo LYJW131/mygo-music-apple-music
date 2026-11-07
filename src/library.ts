@@ -4,6 +4,7 @@
 import { allPages, catalog, me } from "./api.ts";
 import { forget, forgetAll, kept } from "./background.ts";
 import { songsOf, toAlbum, toPlaylist } from "./models.ts";
+import { prefetch } from "./prefetch.ts";
 import { signedIn } from "./session.ts";
 import type { Resource } from "./types/apple.ts";
 import type { Album, Playlist, Track } from "./types/music.ts";
@@ -96,7 +97,10 @@ export async function liked(
       return { tracks: songsOf(body?.data), more: !!body?.next };
     },
     ahead,
-  );
+  ).then((page) => {
+    if (!ahead) prefetch(page.tracks);
+    return page;
+  });
 }
 
 export async function isLiked({ ids }: { ids: string[] }): Promise<Record<string, boolean>> {

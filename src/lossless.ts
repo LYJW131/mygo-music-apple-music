@@ -116,6 +116,22 @@ export function noteAudio(id: string, a: Attributes): void {
   if (audio.size > AUDIO_MOST) audio.delete(audio.keys().next().value!);
 }
 
+/**
+ * Learns what the catalog says of these songs' audio, in one request for up
+ * to 300: songs a page lists from the library come without it, and asking
+ * for one as it's played costs it most of a second.
+ */
+export async function learnAudio(ids: string[]): Promise<void> {
+  const missing = [...new Set(ids)].filter((id) => !audio.has(id));
+  for (let i = 0; i < missing.length; i += 300) {
+    const body = await catalog("/songs", {
+      ids: missing.slice(i, i + 300).join(","),
+      "fields[songs]": "audioTraits,extendedAssetUrls",
+    });
+    for (const song of body?.data ?? []) if (song.attributes) noteAudio(song.id, song.attributes);
+  }
+}
+
 async function audioOf(id: string): Promise<Audio | null> {
   if (!audio.has(id)) {
     const song = first(await catalog(`/songs/${id}`, { "fields[songs]": "audioTraits,extendedAssetUrls" }));
@@ -214,6 +230,28 @@ export function prepare(id: string, ahead = false): Promise<Known | null> {
     })
     .catch(() => {});
   return job;
+}
+
+// Songs amhelper was asked to find, whose playlists it keeps.
+const found = new Set<string>();
+const FOUND_MOST = 2000;
+
+/**
+ * Asks amhelper to read the song's playlists from Apple, without its keys,
+ * so that when it's played only the keys are waited for. Only for a song the
+ * catalog said has ALAC (learnAudio).
+ */
+export async function find(id: string): Promise<void> {
+  loadKnown();
+  const a = audio.get(id);
+  if (!a?.lossless || known.has(id) || preparing.has(id) || found.has(id)) return;
+  if (found.size >= FOUND_MOST) found.clear();
+  found.add(id);
+  const { base } = await running();
+  const q = playlistQuery(a);
+  const res = await fetch(`${base}/find/${id}${q}${q ? "&" : "?"}ahead=1`).catch(() => null);
+  await res?.body?.cancel();
+  if (!res?.ok) found.delete(id);
 }
 
 function remember(id: string, q: Known | null): void {

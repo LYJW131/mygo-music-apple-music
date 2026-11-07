@@ -2,7 +2,7 @@
 
 import { UA } from "./constants.ts";
 import { ffmpeg } from "./ffmpeg.ts";
-import { hasWrapper, prepare, preparedOrPreparing, wakeWrapper, warmLossless } from "./lossless.ts";
+import { find, hasWrapper, learnAudio, prepare, preparedOrPreparing, wakeWrapper, warmLossless } from "./lossless.ts";
 import { resolve, resolvedOrResolving, wantedQuality } from "./playback.ts";
 import { signedIn } from "./session.ts";
 import type { Track } from "./types/music.ts";
@@ -54,13 +54,38 @@ const startedAt: number[] = [];
 
 const ready = (id: string) => (lossless() ? preparedOrPreparing(id) : resolvedOrResolving(id));
 
+// For lossless, more of the page goes further, for nothing from the wrapper:
+// what the catalog says of the first FOUND songs' audio, in one request, and
+// their playlists from Apple's CDN, a few at a time. The one picked then
+// waits for its keys only.
+
+const FOUND = 20;
+const FINDING_AT_ONCE = 4;
+
 export function prefetch(tracks: Track[]): void {
   if (!lossless() && !signedIn()) return;
-  const ids = tracks
-    .filter((x) => !x.unavailable && isCatalogID(x.id))
-    .slice(0, FIRST)
-    .map((x) => x.id)
-    .filter((id) => !ready(id));
+  const all = tracks.filter((x) => !x.unavailable && isCatalogID(x.id)).map((x) => x.id);
+  if (lossless()) {
+    const page = all.slice(0, FOUND);
+    void learnAudio(page)
+      .catch(() => {})
+      .then(() => {
+        prepareFirst(all);
+        return findAll(page);
+      });
+    return;
+  }
+  prepareFirst(all);
+}
+
+async function findAll(ids: string[]): Promise<void> {
+  for (let i = 0; i < ids.length; i += FINDING_AT_ONCE) {
+    await Promise.all(ids.slice(i, i + FINDING_AT_ONCE).map((id) => find(id).catch(() => {})));
+  }
+}
+
+function prepareFirst(all: string[]): void {
+  const ids = all.slice(0, FIRST).filter((id) => !ready(id));
   if (!ids.length) return;
   // The page opened last comes first; what's left of older ones waits behind.
   queue = [...ids, ...queue.filter((id) => !ids.includes(id))].slice(0, QUEUED_MOST);

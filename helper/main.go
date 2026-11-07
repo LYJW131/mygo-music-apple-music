@@ -9,10 +9,11 @@
 //
 //	GET /<secret>/status               the wrapper's {ready, regions}
 //	POST /<secret>/wake                wakes the wrapper (one on Cloudflare sleeps)
+//	GET /<secret>/find/<id>            resolves the song only, without its keys
 //	GET /<secret>/prepare/<id>         resolves the song and fetches its keys
 //	GET /<secret>/song/<id>.m4a        the song, decrypted, as fragmented MP4
 //
-// prepare and song take maxRate and maxBits, limits on the variant chosen;
+// find, prepare and song take maxRate and maxBits, limits on the variant chosen;
 // ahead=1, for a song worked out before it's played, which waits behind the
 // songs played (queue.go);
 // and master, the song's master playlist as Apple's catalog lists it
@@ -83,6 +84,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET "+prefix+"/status", s.status)
 	mux.HandleFunc("POST "+prefix+"/wake", s.wake)
+	mux.HandleFunc("GET "+prefix+"/find/{id}", s.findOnly)
 	mux.HandleFunc("GET "+prefix+"/prepare/{id}", s.prepare)
 	mux.HandleFunc("GET "+prefix+"/song/{file}", s.song)
 	go func() { log.Fatal(http.Serve(l, mux)) }()
@@ -256,6 +258,28 @@ func (s *server) find(ctx context.Context, req request, tm *timings) (track, err
 	}
 	tm.Source = source
 	return resolveTrack(ctx, s.cdn, master, req.maxRate, req.maxBits, tm)
+}
+
+// findOnly reads the song's playlists from Apple, and keeps what they say, but
+// asks the wrapper for no key: the plugin finds the songs on a page the
+// listener opened, so the one they pick waits for its keys only. A song with
+// device=1 still asks the wrapper for its playlist, behind the songs played.
+func (s *server) findOnly(w http.ResponseWriter, r *http.Request) {
+	req, err := parseRequest(r, r.PathValue("id"))
+	if err != nil {
+		reply(w, http.StatusBadRequest, errorBody{"badRequest", err.Error()})
+		return
+	}
+	var tm timings
+	t, err := s.resolve(s.context(r, req), req, &tm)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	reply(w, http.StatusOK, struct {
+		track
+		Timings timings `json:"timings"`
+	}{t, tm})
 }
 
 func (s *server) prepare(w http.ResponseWriter, r *http.Request) {

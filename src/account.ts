@@ -32,8 +32,8 @@ function keep(token: string): void {
 // and gives it in the settings, as the token alone or the cookies as copied.
 export function givenToken(): string {
   let given = host.setting("mediaUserToken").trim();
-  if (/(^|[\s;])media-user-token=/.test(given))
-    given = cookieValue(given.replace(/^cookie:\s*/i, ""), "media-user-token");
+  const cookie = given.replace(/^cookie:\s*/i, "");
+  if (/(^|[\s;])media-user-token=/.test(cookie)) given = cookieValue(cookie, "media-user-token");
   return given.replace(/^"(.*)"$/, "$1").trim();
 }
 

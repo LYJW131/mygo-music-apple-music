@@ -71,6 +71,11 @@ test("a media-user-token given in the settings signs in, and out once it's empti
   await api.signOut();
   assert.equal(await api.account(), null);
 
+  // The header as some tools copy it, without a space.
+  settings.mediaUserToken = "cookie:media-user-token=Spaceless";
+  await api.setSetting({ key: "mediaUserToken", value: settings.mediaUserToken });
+  assert.equal(storage.get("mediaUserToken"), "Spaceless");
+
   // Another token, or the token alone, signs in with it.
   settings.mediaUserToken = ' "XyZ" ';
   await api.setSetting({ key: "mediaUserToken", value: settings.mediaUserToken });

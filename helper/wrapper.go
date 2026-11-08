@@ -73,7 +73,9 @@ func (w *wrapper) call(ctx context.Context, endpoint string, query url.Values) (
 	if err != nil {
 		return nil, err
 	}
-	if endpoint != "/status" {
+	// /status and /token don't wait behind songs, and don't wake a wrapper
+	// on Cloudflare, whose gateway answers them from its cache.
+	if endpoint != "/status" && endpoint != "/token" {
 		release, err := w.queue.acquire(ctx, query.Get("adamId"))
 		if err != nil {
 			return nil, err
@@ -102,6 +104,10 @@ func (w *wrapper) call(ctx context.Context, endpoint string, query url.Values) (
 		return nil, fmt.Errorf("%w %s: the key was refused", errWrapper, endpoint)
 	}
 	if err := json.Unmarshal(raw, &reply); err != nil {
+		if res.StatusCode == http.StatusNotFound {
+			// A route this wrapper doesn't have.
+			return nil, &replyError{endpoint: endpoint, status: res.StatusCode, msg: "not found"}
+		}
 		return nil, fmt.Errorf("%w %s: HTTP %d: %.200s", errWrapper, endpoint, res.StatusCode, raw)
 	}
 	if res.StatusCode != http.StatusOK || reply.Code != 0 {

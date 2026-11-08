@@ -1,5 +1,7 @@
-// Signing in, on music.apple.com in a window the app shows, or with a
-// media-user-token the listener gives in the settings.
+// Signing in, on music.apple.com in a window the app shows, with a
+// media-user-token the listener gives in the settings, or as an account the
+// listener's wrapper holds (wrapperaccount.ts). A token given goes first,
+// then the wrapper's account, and the window only without either.
 
 import { me, storefront } from "./api.ts";
 import { art } from "./artwork.ts";
@@ -8,6 +10,7 @@ import { forgetLibrary } from "./library.ts";
 import { signedIn } from "./session.ts";
 import type { Account } from "./types/music.ts";
 import { codeOf, fail, t } from "./util.ts";
+import { askWrapper, type FromWrapper, wrapperAccount, wrapperAndAccount } from "./wrapperaccount.ts";
 
 function cookieValue(cookie: string, name: string): string {
   for (const part of cookie.split(";")) {
@@ -57,7 +60,53 @@ export function useGivenToken(): void {
   if (host.storage.get<string>("mediaUserToken") === used) signOut();
 }
 
+// Signs in as the account of the wrapper the settings name, once it's named
+// or the wrapper changes, and out of the one named before. Not again after
+// the listener signed out, until they sign in. A wrapper that didn't answer
+// isn't asked again for a minute, as the app asks for the account often and
+// a wrapper not there takes long to fail.
+let failed: { of: string; at: number } | null = null;
+const RETRY_AFTER = 60 * 1000;
+
+export async function useWrapperAccount(force = false): Promise<void> {
+  const kept = host.storage.get<FromWrapper>("wrapperAccount");
+  const wanted = wrapperAccount() && !givenToken() ? wrapperAndAccount() : "";
+  if (kept && kept.of === wanted && !force) return;
+  if (kept) {
+    host.storage.remove("wrapperAccount");
+    if (host.storage.get<string>("mediaUserToken") === kept.token) signOut();
+  }
+  if (!wanted) return;
+  if (!force && failed?.of === wanted && Date.now() - failed.at < RETRY_AFTER) return;
+  try {
+    const got = await askWrapper();
+    failed = null;
+    host.storage.set("wrapperAccount", got);
+    keep(got.token);
+  } catch (e) {
+    failed = { of: wanted, at: Date.now() };
+    throw e;
+  }
+}
+
+/** Forgets that the wrapper didn't answer, as its address or key changed. */
+export function retryWrapper(): void {
+  failed = null;
+}
+
 export async function signIn(): Promise<Account | null> {
+  if (!givenToken() && wrapperAccount()) {
+    await useWrapperAccount(true);
+    try {
+      return await account();
+    } catch (e) {
+      if (codeOf(e) !== "signIn") throw e;
+      throw fail(
+        "setup",
+        t("Apple Music didn't accept the token of the wrapper's account. Log it in to the wrapper again."),
+      );
+    }
+  }
   if (givenToken()) {
     // Again, as after signing out the token there hasn't changed. The window
     // won't help while it's there: it wouldn't be used.
@@ -127,6 +176,11 @@ export async function account(): Promise<Account | null> {
     useGivenToken();
   } catch {
     // Said as it was given; until then, whoever is signed in stays.
+  }
+  try {
+    await useWrapperAccount();
+  } catch {
+    // Said as the listener signs in.
   }
   if (!signedIn()) return null;
   const [sf, p] = await Promise.all([storefront(), profile()]);

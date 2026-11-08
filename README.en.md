@@ -31,6 +31,26 @@ one, sign in in your own browser and give the plugin its token:
 That signs you in. Signing in again then uses it without the window; emptying it signs you out. When the token runs out
 (usually after some months), copy and paste a new one.
 
+<a id="wrapper-account"></a>
+
+### Signing in with the wrapper's account
+
+If your account is logged in to a [wrapper-manager](#lossless) already, the plugin can sign in as it: set **Wrapper
+Address** (and **Wrapper Key**) in Settings > Plugins > Apple Music, and put the account's Apple ID, as logged in to the
+wrapper, in **Wrapper Account**. The plugin asks the wrapper for the account's media-user-token through `amhelper`; the
+wrapper refreshes the token on its own, the plugin follows, and asks again if Apple refuses it. This works for accounts
+with a passkey too. It needs AMDL-Web's wrapper (upstream's wrapper-lite has no `/token`).
+
+- **Several accounts**: a wrapper-manager holds up to 10 accounts, each with its own library, so the plugin never takes
+  whichever comes first, only the one **Wrapper Account** names. When a household shares a wrapper, each person names
+  their own Apple ID. A country or region code such as `jp` names the wrapper's first ready account there. An account
+  logged in before the wrapper noted Apple IDs is still found by its Apple ID, through wrapper-manager's account id.
+  When the wrapper doesn't hold the account named, the error lists the ones it holds.
+- Lossless is unaffected: wrapper-manager still picks the account for each song's country or region, whichever account
+  you're signed in as.
+- A **Media User Token** in the settings goes first. Emptying **Wrapper Account** signs you out; after signing out in
+  the app, signing in again signs you back in.
+
 ## Features
 
 - Home recommendations, recently played, stations, library albums, library playlists, recently added.
@@ -80,7 +100,8 @@ new plugin release, which MyGo offers you as an update.
 ## Privacy
 
 - The media-user-token is kept **unencrypted** in the plugin's data and only sent to Apple. Signing out forgets it on
-  this machine only. One given in the settings is kept unencrypted in the plugin's settings too.
+  this machine only. One given in the settings is kept unencrypted in the plugin's settings too, and one from the
+  wrapper, which `amhelper` fetches, in the plugin's data.
 - With **Use Listening History** on (the default), the plugin tells Apple
   (`universal-activity-service.itunes.apple.com`) as each song starts which song it is, how long it is and how long
   the one before played, as the web player at music.apple.com does.

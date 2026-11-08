@@ -41,5 +41,11 @@
   "Media User Token": "Media User Token",
   "For an Apple Account that signs in with a passkey or security key, which the sign-in window can't use: sign in at music.apple.com in your browser, and paste the value of its media-user-token cookie here. Empty it to sign out, or to sign in with the window again.": "用于以通行密钥或安全密钥登录的 Apple 账户（登录窗口无法使用它们）：在浏览器里登录 music.apple.com，把 Cookie 中 media-user-token 的值粘贴到这里。清空即退出登录，或改回用登录窗口登录。",
   "That isn't a media-user-token: paste the value of the media-user-token cookie": "这不是 media-user-token：请粘贴 Cookie 中 media-user-token 的值",
-  "Apple Music didn't accept the Media User Token in the settings. Paste a new one, or empty it to sign in here.": "Apple Music 不接受设置里的 Media User Token。请粘贴一个新的，或清空后在这里登录。"
+  "Apple Music didn't accept the Media User Token in the settings. Paste a new one, or empty it to sign in here.": "Apple Music 不接受设置里的 Media User Token。请粘贴一个新的，或清空后在这里登录。",
+  "Wrapper Account": "Wrapper 账户",
+  "To sign in as an Apple Account the wrapper holds, without the sign-in window: its Apple ID as logged in to the wrapper, or a country or region code such as jp for the wrapper's account there. When the wrapper holds several accounts, each listener names their own. Empty to sign in here.": "用 wrapper 里登录的 Apple 账户登录，不用登录窗口：填它在 wrapper 里登录的 Apple ID，或填国家或地区代码（如 jp）以使用 wrapper 里该地区的账户。wrapper 里有多个账户时，每位听众填自己的。留空则在这里登录。",
+  "Set the Wrapper Address too, to sign in with an account the wrapper holds": "要用 wrapper 里的账户登录，还需要设置 Wrapper 地址",
+  "Signing in with the wrapper needs amhelper, which the plugin for this platform lacks": "用 wrapper 登录需要 amhelper，但这个平台的插件没有附带它",
+  "Check the Wrapper Account in the settings": "请检查设置里的 Wrapper 账户",
+  "Apple Music didn't accept the token of the wrapper's account. Log it in to the wrapper again.": "Apple Music 不接受 wrapper 里这个账户的令牌。请在 wrapper 里重新登录该账户。"
 }

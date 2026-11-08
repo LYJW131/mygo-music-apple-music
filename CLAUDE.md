@@ -29,9 +29,13 @@ and tests amhelper.
 
 - `src/index.ts` exports exactly the functions MyGo calls; `tests/plugin.test.ts` pins that list. Add an export there
   and in the test together.
-- `src/api.ts` requests to amp-api (dev token + `media-user-token`, 401 retries once with a fresh dev token),
-  `session.ts` tokens, `account.ts` sign-in (the window, or the
-  `mediaUserToken` setting for accounts with a passkey or security key, which the window can't use), `models.ts` Apple resources → MyGo shapes.
+- `src/api.ts` requests to amp-api (dev token + `media-user-token`, 401 retries once with a fresh dev token, and a
+  refused token from the wrapper once after asking it again), `session.ts` tokens, `account.ts` sign-in (the
+  `mediaUserToken` setting first, for accounts with a passkey or security key, which the window can't use; then the
+  `wrapperAccount` setting; else the window), `wrapperaccount.ts` the token of an account the wrapper holds (amhelper's
+  `GET token?account=`, asked again a little after the wrapper's `next_refresh_at`, between a minute and an hour; a
+  wrapper-manager holds up to ten accounts, so the setting names one by Apple ID, instance id or region, never the first
+  that comes), `models.ts` Apple resources → MyGo shapes.
 - Pages: `browse.ts` (home, charts, recently added), `search.ts`, `library.ts`, `pages.ts` (album/artist/playlist),
   `stations.ts`, `lyrics.ts` (TTML).
 - Playing: `playback.ts` (webPlayback → m3u8 → license; the song handed to amhelper as `POST aac/<id>` with its key
@@ -50,7 +54,8 @@ and tests amhelper.
   and serve `song/<id>.m4a`; `null` falls back to AAC. Following amdl, lossless songs use the catalog's master
   playlist and Hi-Res ones the wrapper's `/m3u8` first (the catalog's sometimes lacks 88.2–192 kHz).
 - `helper/`: `main.go` routes, `aac.go` the AAC (CENC, AES-CTR with each sample's IV from `senc`, and an edit list that
-  skips the encoder's 2112 frames of priming), `cover.go` playlist covers (JPEG, shrunk to 600 wide), `wrapper.go` the
+  skips the encoder's 2112 frames of priming), `cover.go` playlist covers (JPEG, shrunk to 600 wide), `account.go` an account's token (`/status`'s instances, then
+  `/token?instance=`; neither waits behind songs), `wrapper.go` the
   wrapper client (one request at a time, `queue.go` puts played songs
   before ones prepared ahead), `hls.go` playlists, `mp4.go` decrypts Apple's 15 s fragments into ~1 s ones as they
   arrive, `alac.go` checks a key's first samples look like ALAC (a wrong template gives noise, not an error),
@@ -94,7 +99,8 @@ The bundle runs in MyGo's moejs runtime, not Node:
 - Errors the app should act on carry a code: `fail("signIn" | "setup" | "unavailable" | "unsupported", message)`.
 - `host.storage` keys: `mediaUserToken`, `givenToken` (the `mediaUserToken` setting last signed in with, for accounts
   the sign-in window can't sign in to), `storefront`, `profile` (name and picture, a day), `devToken`, `resolved` (song → media + key + seconds, ≤3000; ones kept without seconds have their playlist read again), `covers`,
-  `quality` (the app's last asked), `lossless` (song → its ALAC or none, a week).
+  `quality` (the app's last asked), `wrapperAccount` (the wrapper and account named, the token it gave and when to ask
+  again), `lossless` (song → its ALAC or none, a week).
 
 ## Conventions
 

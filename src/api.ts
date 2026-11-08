@@ -4,6 +4,7 @@ import { AMP, UA, WEB } from "./constants.ts";
 import { developerToken, needAccount, signedIn, userToken } from "./session.ts";
 import type { Body, Resource } from "./types/apple.ts";
 import { fail, t } from "./util.ts";
+import { inUse, renewIfDue, renewRefused } from "./wrapperaccount.ts";
 
 export type Params = Record<string, string | number | undefined | null> | null | undefined;
 
@@ -25,17 +26,22 @@ export function query(params: Params): string {
   return parts.length ? `?${parts.join("&")}` : "";
 }
 
-const signInAgain = () => fail("signIn", t("Apple Music didn't accept the sign-in. Sign in again."));
+const signInAgain = () =>
+  inUse()
+    ? fail("setup", t("Apple Music didn't accept the token of the wrapper's account. Log it in to the wrapper again."))
+    : fail("signIn", t("Apple Music didn't accept the sign-in. Sign in again."));
 
 /** JSON from Apple, or null for an empty answer. */
 export async function request<T = Body>(
   url: string,
   { method = "GET", body, user = true, userHeader = "media-user-token" }: RequestOptions = {},
 ): Promise<T | null> {
+  if (user) renewIfDue();
+  let renewed = false;
+  let freshDev = false;
   for (let attempt = 0; ; attempt++) {
     const headers: Record<string, string> = {
-      // A 401 can be a developer token that has run out: try once with a new one.
-      Authorization: `Bearer ${await developerToken(attempt > 0)}`,
+      Authorization: `Bearer ${await developerToken(freshDev)}`,
       Origin: WEB,
       Referer: `${WEB}/`,
       "User-Agent": UA,
@@ -45,10 +51,20 @@ export async function request<T = Body>(
     if (mine) headers[userHeader] = mine;
     if (body !== undefined) headers["Content-Type"] = "application/json";
     const res = await fetch(url, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
-    if (res.status === 401 && attempt === 0) continue;
+    // A 401 can be a developer token that has run out: try once with a new one.
+    if (res.status === 401 && attempt === 0) {
+      freshDev = true;
+      continue;
+    }
+    freshDev = false;
     if (res.status === 204 || res.status === 202) return null;
     const text = await res.text();
     if (res.status === 401 || res.status === 403) {
+      // A token from the wrapper may have been replaced by its own refresh.
+      if (mine && !renewed && (await renewRefused(mine))) {
+        renewed = true;
+        continue;
+      }
       if (mine) throw signInAgain();
       throw new Error(`Apple Music: HTTP ${res.status}`);
     }

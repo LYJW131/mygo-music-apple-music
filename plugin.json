@@ -35,6 +35,12 @@
       "help": "The wrapper's key (API_KEY), the same one amdl uses: for a wrapper-manager on Cloudflare, or one that faces the internet. Empty for one on this computer or your network without a key."
     },
     {
+      "key": "wrapperAccount",
+      "label": "Wrapper Account",
+      "help": "To sign in as an Apple Account the wrapper holds, without the sign-in window: its Apple ID as logged in to the wrapper, or a country or region code such as jp for the wrapper's account there. When the wrapper holds several accounts, each listener names their own. Empty to sign in here.",
+      "link": "https://github.com/LYJW131/mygo-music-apple-music#wrapper-account"
+    },
+    {
       "key": "listeningHistory",
       "label": "Use Listening History",
       "help": "Songs you play here show in Recently Played and count toward Replay and recommendations, as in Apple's own apps. Empty means on; type off to turn it off."

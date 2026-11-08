@@ -23,6 +23,16 @@ MyGo Music 的登录窗口不支持通行密钥（Passkey）和 YubiKey 这类�
 
 填好即登录。之后点登录也直接用它，不再打开登录窗口；清空这一项即退出登录。令牌失效后（一般几个月）重新复制一个粘贴进去。
 
+<a id="wrapper-account"></a>
+
+### 用 wrapper 里的账户登录
+
+已经在 [wrapper-manager](#lossless) 里登录了自己的账户，就不用在插件里再登录一次：在「设置 → 插件 → Apple Music」里填好 **Wrapper 地址**（和 **Wrapper 密钥**），再在 **Wrapper 账户** 里填这个账户在 wrapper 里登录用的 Apple ID。插件通过 `amhelper` 向 wrapper 要这个账户的 media-user-token，wrapper 自己定期刷新令牌，插件随后跟着更新，Apple 拒绝令牌时也会再要一次。通行密钥账户也能这样登录。需要 AMDL-Web 的 wrapper（上游的 wrapper-lite 没有 `/token`）。
+
+- **多个账户**：一个 wrapper-manager 最多登录 10 个账户，各有各的资料库，所以插件不会随便拿第一个，只用 **Wrapper 账户** 指定的那个。家里几个人共用一个 wrapper 时，各自填自己的 Apple ID 即可。也可以填国家或地区代码（如 `jp`），用 wrapper 里该地区第一个可用的账户；早于 wrapper 记录 Apple ID 时登录的账户，仍可用 Apple ID 找到（按 wrapper-manager 的账户 ID 匹配）。填的账户 wrapper 里没有时，错误信息会列出 wrapper 里有哪些账户。
+- 无损播放不受影响：wrapper-manager 仍按歌曲所在的国家或地区挑账户解密，与登录的是哪个账户无关。
+- 同时填了 **Media User Token** 时以它为准。清空 **Wrapper 账户** 即退出登录；在应用里退出登录后，要点登录才会重新登录。
+
 ## 功能
 
 - 首页推荐、最近播放、电台、资料库专辑、资料库歌单、最近添加。
@@ -63,7 +73,7 @@ MyGo Music 发新版本后，会有一个自动化流程检查这个版本是否
 
 ## 隐私
 
-- media-user-token 以**明文形式**保存在个插件数据目录里，只发给 Apple，退出登录只删本机。在设置里填写的令牌也以明文保存在插件设置里。
+- media-user-token 以**明文形式**保存在个插件数据目录里，只发给 Apple，退出登录只删本机。在设置里填写的令牌也以明文保存在插件设置里。用 wrapper 里的账户登录时，令牌由 `amhelper` 从 wrapper 取来，同样保存在插件数据目录里。
 - 开启「使用收听历史记录」时（默认开启），每首歌开始播放时，插件把歌曲 ID、时长和播放了多久发给 Apple（`universal-activity-service.itunes.apple.com`），和 Apple Music 网页版上报的一样。
 - Wrapper 密钥保存在插件设置里，只发给设置的 wrapper 地址。`amhelper` 只监听本机，要带随机路径才能访问；它在插件数据目录里缓存解密密钥和歌曲信息。
 

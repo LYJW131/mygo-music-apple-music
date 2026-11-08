@@ -25,6 +25,7 @@ import { heard, playing, wake } from "./prefetch.ts";
 import * as se from "./search.ts";
 import * as st from "./stations.ts";
 import { stopWarming, warmLibrary } from "./warmup.ts";
+import { notHeld } from "./wrapperaccount.ts";
 
 // The app's ask, which also starts fetching the library ahead, once it's
 // quiet, and wakes the wrapper for lossless, unless it's a song to play,
@@ -49,12 +50,21 @@ export const signOut = asked(() => {
   stopWarming();
   acc.signOut();
 });
-// A setting changed: the app asks who's signed in after. Only the token
-// signs anyone in or out; the rest is read as it's used.
-export const setSetting = asked((p: { key: string; value: string }) => {
-  if (p.key !== "mediaUserToken") return;
+// A setting changed: the app asks who's signed in after. Only the token and
+// the wrapper's account sign anyone in or out; the rest is read as it's used.
+// Naming an account the wrapper doesn't hold is said at once; a wrapper not
+// set yet, or not answering, as the listener signs in.
+export const setSetting = asked(async (p: { key: string; value: string }) => {
+  if (p.key === "wrapper" || p.key === "wrapperKey") acc.retryWrapper();
+  if (p.key !== "mediaUserToken" && p.key !== "wrapperAccount") return;
   stopWarming();
-  acc.useGivenToken();
+  if (p.key === "mediaUserToken") acc.useGivenToken();
+  acc.retryWrapper();
+  try {
+    await acc.useWrapperAccount();
+  } catch (e) {
+    if (p.key === "wrapperAccount" && notHeld(e)) throw e;
+  }
 });
 export const home = asked(br.home);
 export const browse = asked(br.browse);

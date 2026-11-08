@@ -15,6 +15,7 @@
 //	POST /<secret>/cover/<name>        {url}: keeps a playlist cover in covers
 //	GET /<secret>/status               the wrapper's {ready, regions}
 //	POST /<secret>/wake                wakes the wrapper (one on Cloudflare sleeps)
+//	GET /<secret>/token?account=       an account's {token, region, next, account} (account.go)
 //	GET /<secret>/find/<id>            resolves the song only, without its keys
 //	GET /<secret>/prepare/<id>         resolves the song and fetches its keys
 //	GET /<secret>/song/<id>.m4a        the song's ALAC, decrypted, as fragmented MP4
@@ -28,8 +29,8 @@
 // device playlist first, which lists the 88.2, 96 and 192 kHz ALAC that the
 // catalog's sometimes leaves out, and falls back to master. prepare answers
 // the variant and how long each step took. Errors are {code, message}: code
-// "noALAC" when the song has none, "wrapper" when the wrapper failed or
-// there is none.
+// "noALAC" when the song has none, "account" when the wrapper doesn't hold
+// the account named, "wrapper" when the wrapper failed or there is none.
 package main
 
 import (
@@ -108,6 +109,7 @@ func main() {
 	}
 	mux.HandleFunc("GET "+prefix+"/status", needsWrapper(s.status))
 	mux.HandleFunc("POST "+prefix+"/wake", needsWrapper(s.wake))
+	mux.HandleFunc("GET "+prefix+"/token", needsWrapper(s.token))
 	mux.HandleFunc("GET "+prefix+"/find/{id}", needsWrapper(s.findOnly))
 	mux.HandleFunc("GET "+prefix+"/prepare/{id}", needsWrapper(s.prepare))
 	mux.HandleFunc("GET "+prefix+"/song/{file}", needsWrapper(s.song))
@@ -151,6 +153,15 @@ func (s *server) status(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	reply(w, http.StatusOK, st)
+}
+
+func (s *server) token(w http.ResponseWriter, r *http.Request) {
+	t, err := s.wrapper.accountToken(r.Context(), r.URL.Query().Get("account"))
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	reply(w, http.StatusOK, t)
 }
 
 func (s *server) wake(w http.ResponseWriter, _ *http.Request) {
@@ -496,6 +507,8 @@ type errorBody struct {
 func fail(w http.ResponseWriter, err error) {
 	var re *replyError
 	switch {
+	case errors.Is(err, errAccount):
+		reply(w, http.StatusNotFound, errorBody{"account", strings.TrimPrefix(err.Error(), errAccount.Error()+": ")})
 	case errors.Is(err, errNoALAC):
 		reply(w, http.StatusNotFound, errorBody{"noALAC", err.Error()})
 	case errors.Is(err, errWrapper), errors.As(err, &re):

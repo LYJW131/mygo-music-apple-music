@@ -12,15 +12,31 @@
 // over, as long as asked. /cdn/<id>/plain.m4a is the same song unencrypted,
 // to compare what comes out of amhelper with.
 //
+// It also serves the AAC the web player plays, which the plugin gets the key
+// of itself: /cdn/<id>/aac.mp4, AAC-LC in 10-second fragments encrypted with
+// CENC under a key it prints, and /cdn/<id>/aac-plain.mp4 the same
+// unencrypted. Its audio is testdata/tone.aac, two seconds of rising tones
+// that ffmpeg made, over and over, without noise substitution, whose random
+// noise would come out differently from a decoder started anywhere but the
+// first packet:
+//
+//	ffmpeg -f lavfi -i "aevalsrc='0.3*sin(2*PI*(220+110*t)*t)|0.3*sin(2*PI*(330+55*t)*t)':s=44100:d=2" \
+//	  -c:a aac -aac_pns 0 -b:a 128k -f adts tone.aac
+//
 //	go run ./cmd/fakeapple [-addr 127.0.0.1:0] [-seconds 40] [-rate 44100] [-kbps 0] [-key-delay 0]
 //
-// It prints one JSON line, {"wrapper": URL, "master": URL of song 1}, and
-// serves until killed. Give amhelper the wrapper URL as its wrapper, and ask
-// it for any catalog ID without master=.
+// It prints one JSON line, {"wrapper": URL, "master": URL of song 1, "aac":
+// path of song 1's AAC, "aacKey": its key in hex, "aacSeconds": its length as
+// the playlist would add it up}, and serves until killed. Give amhelper the
+// wrapper URL as its wrapper, and ask it for any catalog ID without master=.
+// For the AAC, run amhelper with AMHELPER_APPLE set to the base URL, so that
+// it asks this for what it would ask Apple's CDN.
 package main
 
 import (
 	"bytes"
+	_ "embed"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -35,6 +51,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Eyevinn/mp4ff/aac"
 	"github.com/Eyevinn/mp4ff/mp4"
 )
 
@@ -42,7 +59,13 @@ const (
 	frames      = 4096 // per ALAC packet
 	fragmentLen = 15.0 // seconds, as Apple's
 	prefetchKey = "skd://itunes.apple.com/P000000000/s1/e1"
+
+	aacFrames   = 1024 // per AAC packet
+	aacFragment = 430  // packets, 10 s, as the web player's
 )
+
+// The AAC's key, and the IV its samples' counters start from.
+var aacKey, aacIV = []byte("fakeapple aackey"), []byte("fakeiv08")
 
 func main() {
 	addr := flag.String("addr", "127.0.0.1:0", "address to listen on")
@@ -65,6 +88,9 @@ func main() {
 	encrypted := song(ct, packets, *rate, true)
 	plain := song(pt, packets, *rate, false)
 	playlist := mediaPlaylist(packets, *rate)
+	tone := adtsFrames(toneADTS)
+	aacPackets := int(math.Ceil(*seconds * 44100 / aacFrames))
+	aacEncrypted, aacPlain := aacSong(tone, aacPackets, true), aacSong(tone, aacPackets, false)
 
 	ln, err := net.Listen("tcp", *addr)
 	if err != nil {
@@ -98,10 +124,84 @@ alac.m3u8
 	mux.HandleFunc("GET /cdn/{id}/alac.m3u8", func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, playlist) })
 	mux.HandleFunc("GET /cdn/{id}/media.mp4", func(w http.ResponseWriter, r *http.Request) { serve(w, r, encrypted, *kbps) })
 	mux.HandleFunc("GET /cdn/{id}/plain.m4a", func(w http.ResponseWriter, r *http.Request) { serve(w, r, plain, 0) })
+	mux.HandleFunc("GET /cdn/{id}/aac.mp4", func(w http.ResponseWriter, r *http.Request) { serve(w, r, aacEncrypted, *kbps) })
+	mux.HandleFunc("GET /cdn/{id}/aac-plain.mp4", func(w http.ResponseWriter, r *http.Request) { serve(w, r, aacPlain, 0) })
 
-	line, _ := json.Marshal(map[string]string{"wrapper": base, "master": base + "/cdn/1/master.m3u8"})
+	line, _ := json.Marshal(map[string]any{"wrapper": base, "master": base + "/cdn/1/master.m3u8",
+		"aac": "/cdn/1/aac.mp4", "aacKey": hex.EncodeToString(aacKey), "aacSeconds": float64(aacPackets*aacFrames) / 44100})
 	fmt.Println(string(line))
 	log.Fatal(http.Serve(ln, mux))
+}
+
+//go:embed testdata/tone.aac
+var toneADTS []byte
+
+// adtsFrames takes the raw AAC packets out of an ADTS stream.
+func adtsFrames(b []byte) [][]byte {
+	var out [][]byte
+	for len(b) >= 7 {
+		if b[0] != 0xff || b[1]&0xf0 != 0xf0 {
+			log.Fatal("tone.aac: not ADTS")
+		}
+		header := 7
+		if b[1]&1 == 0 {
+			header = 9 // with a CRC
+		}
+		n := int(b[3]&3)<<11 | int(b[4])<<3 | int(b[5])>>5
+		if n < header || n > len(b) {
+			log.Fatal("tone.aac: a frame runs past the end")
+		}
+		out = append(out, b[header:n])
+		b = b[n:]
+	}
+	return out
+}
+
+// aacSong is packets of the tone, over and over, in 10-second fragments as
+// the web player's, encrypted with CENC or not. Like Apple's, the header
+// gives no length.
+func aacSong(tone [][]byte, packets int, encrypted bool) []byte {
+	init := mp4.CreateEmptyInit()
+	init.AddEmptyTrack(44100, "audio", "und")
+	trak := init.Moov.Trak
+	if err := trak.SetAACDescriptor(aac.AAClc, 44100); err != nil {
+		log.Fatal(err)
+	}
+	var ipd *mp4.InitProtectData
+	if encrypted {
+		kid, _ := mp4.NewUUIDFromString("00112233-4455-6677-8899-aabbccddeeff")
+		var err error
+		if ipd, err = mp4.InitProtect(init, aacKey, aacIV, "cenc", kid, nil); err != nil {
+			log.Fatal(err)
+		}
+	}
+	var buf bytes.Buffer
+	if err := init.Encode(&buf); err != nil {
+		log.Fatal(err)
+	}
+	for n, first := 0, 0; first < packets; n, first = n+1, first+aacFragment {
+		frag, err := mp4.CreateFragment(uint32(n+1), trak.Tkhd.TrackID)
+		if err != nil {
+			log.Fatal(err)
+		}
+		for i := first; i < min(first+aacFragment, packets); i++ {
+			data := bytes.Clone(tone[i%len(tone)])
+			frag.AddFullSample(mp4.FullSample{
+				Sample:     mp4.NewSample(mp4.SyncSampleFlags, aacFrames, uint32(len(data)), 0),
+				DecodeTime: uint64(i) * aacFrames,
+				Data:       data,
+			})
+		}
+		if encrypted {
+			if _, err := mp4.EncryptFragment(frag, aacKey, aacIV, ipd); err != nil {
+				log.Fatal(err)
+			}
+		}
+		if err := frag.Encode(&buf); err != nil {
+			log.Fatal(err)
+		}
+	}
+	return buf.Bytes()
 }
 
 func defaultTestdata() string {

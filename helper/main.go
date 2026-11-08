@@ -87,7 +87,7 @@ func main() {
 	}
 	secret := make([]byte, 16)
 	_, _ = rand.Read(secret)
-	s := &server{wrapper: w, store: st, cdn: &http.Client{}, tracks: newLRU[cachedTrack](tracksKept), resolving: map[string]*resolveCall{},
+	s := &server{wrapper: w, store: st, cdn: cdnClient(os.Getenv("AMHELPER_APPLE")), tracks: newLRU[cachedTrack](tracksKept), resolving: map[string]*resolveCall{},
 		aac: newLRU[aacSong](aacKept), aacOpened: map[string]*openedMedia{}, covers: newCovers(cfg.Covers)}
 	for k, t := range st.tracks() {
 		s.tracks.put(k, t)
@@ -184,6 +184,34 @@ func parseRequest(r *http.Request, id string) (request, error) {
 func appleURL(s string) bool {
 	u, err := url.Parse(s)
 	return err == nil && u.Scheme == "https" && (u.Hostname() == "apple.com" || strings.HasSuffix(u.Hostname(), ".apple.com"))
+}
+
+// cdnClient fetches from Apple's CDN, or, given AMHELPER_APPLE, a base URL,
+// from there instead: the end-to-end tests set it to cmd/fakeapple's, as they
+// have no account. The plugin never sets it.
+func cdnClient(stand string) *http.Client {
+	if stand == "" {
+		return &http.Client{}
+	}
+	base, err := url.Parse(stand)
+	if err != nil || base.Host == "" {
+		log.Fatalf("AMHELPER_APPLE: not a URL: %q", stand)
+	}
+	log.Printf("asking %s for Apple's files", base.Host)
+	return &http.Client{Transport: standIn{base, http.DefaultTransport}}
+}
+
+type standIn struct {
+	base *url.URL
+	next http.RoundTripper
+}
+
+func (s standIn) RoundTrip(r *http.Request) (*http.Response, error) {
+	if appleURL(r.URL.String()) {
+		r = r.Clone(r.Context())
+		r.URL.Scheme, r.URL.Host, r.Host = s.base.Scheme, s.base.Host, ""
+	}
+	return s.next.RoundTrip(r)
 }
 
 // timings is how long each step of working a song out took, in ms.

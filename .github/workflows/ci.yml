@@ -4,6 +4,8 @@ on:
   pull_request:
   push:
     branches: [main]
+  # Release runs it too, and publishes only when it passes.
+  workflow_call:
 
 permissions:
   contents: read
@@ -30,3 +32,38 @@ jobs:
       - run: npm run check
       - name: Check for tracked-file changes
         run: git diff --exit-code
+
+  # The plugin played end to end on every platform a release ships amhelper
+  # for, each on its own machine: MyGo Music's plugin host and player (its
+  # minAppVersion and newest release), amhelper built there, and
+  # cmd/fakeapple for Apple, so no account (scripts/e2e.ts).
+  e2e:
+    name: e2e (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { platform: linux-amd64, runner: ubuntu-latest }
+          - { platform: linux-arm64, runner: ubuntu-24.04-arm }
+          - { platform: darwin-arm64, runner: macos-latest }
+          - { platform: darwin-amd64, runner: macos-15-intel }
+          - { platform: windows-amd64, runner: windows-latest }
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    env:
+      # MyGo may want a newer Go than amhelper does.
+      GOTOOLCHAIN: auto
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: helper/go.mod
+          cache-dependency-path: helper/go.sum
+      - run: npm ci
+      - run: npm run test:e2e

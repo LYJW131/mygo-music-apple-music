@@ -16,6 +16,7 @@ npm run check        # typecheck + prettier --check + test + test:helper + packa
 npm run test:helper  # go vet + go test in helper/
 npm run helper       # builds amhelper for this machine into dist/plugin/bin
 npm run format       # prettier --write
+npm run test:e2e     # plays AAC and ALAC through MyGo's own plugin host and player, no account (CI, every platform)
 npm run test:live    # signed out, real Apple API (not in CI)
 APPLE_MUSIC_TOKEN_FILE=… npm run test:signed-in   # signed in, plays one song through amhelper and ffmpeg (not in CI;
                                                   # npm run helper after its build, or it plays through ffmpeg twice)
@@ -71,8 +72,13 @@ and tests amhelper.
   draft pull request of one commit, made through `createCommitOnBranch` so GitHub signs it as lyjw131[bot],
   co-authored by the Claude models only. To run it locally, set `ANTHROPIC_BASE_URL` to the magpie gateway
   (`http://127.0.0.1:3425`) and any `ANTHROPIC_API_KEY`.
-  `helper/cmd/fakeapple` stands in for a wrapper and Apple's CDN (Temari's published sample, looped), so amhelper
-  runs end to end without an account.
+  `helper/cmd/fakeapple` stands in for a wrapper and Apple's CDN (Temari's published sample, looped, and the web
+  player's CENC AAC, made from `testdata/tone.aac`), so amhelper runs end to end without an account; amhelper asks it
+  for Apple's files when `AMHELPER_APPLE` is set.
+- End to end: `scripts/e2e.ts` checks out MyGo (its `minAppVersion` and newest release) into `dist/e2e`, copies
+  `e2e/mygo_test.go` into its `internal/player`, and runs it: MyGo's plugin host loads the built plugin with a song
+  of each kept in its storage, and MyGo's player plays what it answers, checked sample for sample against the same
+  audio unencrypted. CI runs it on each platform a release ships amhelper for.
 - Types: `src/types/host.d.ts` (the global `host`), `music.ts` (what MyGo takes), `apple.ts` (what Apple answers).
 
 ## Runtime constraints
@@ -109,7 +115,7 @@ release is required. `scripts/package.ts` builds all of them; `scripts/helper.ts
 
 1. Raise `version` in `plugin.json`, push to `main`, wait for CI.
 2. Tag that commit `v<version>` and push the tag. The **Release** workflow checks the tag matches `plugin.json` and is
-   on `main`, runs `npm run check`, and publishes the release with the zips and their SHA-256. Every listener is
+   on `main`, runs CI (`npm run check`, and the end-to-end test on every platform), and publishes the release with the zips and their SHA-256. Every listener is
    offered it as an update, so ask the maintainer before pushing a tag.
 
 To try a build in the local app, unzip `dist/release/…-linux-amd64.zip` (or copy `dist/plugin/*` after

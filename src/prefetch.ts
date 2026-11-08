@@ -1,6 +1,7 @@
 // Getting ready before the listener picks a song, so it starts at once.
 
 import { UA } from "./constants.ts";
+import { helperMissing, warmHelper } from "./amhelper.ts";
 import { ffmpeg } from "./ffmpeg.ts";
 import { find, hasWrapper, learnAudio, prepare, preparedOrPreparing, wakeWrapper, warmLossless } from "./lossless.ts";
 import { resolve, resolvedOrResolving, wantedQuality } from "./playback.ts";
@@ -135,7 +136,10 @@ export function warm(): void {
   if (lossless()) warmLossless();
   if (!signedIn() || Date.now() - warmed < WARM_EVERY) return;
   warmed = Date.now();
-  ffmpeg().catch(() => {}); // the check costs a play its first tenth of a second
+  // Starting amhelper, or finding ffmpeg where there's none, costs a play
+  // its first tenth of a second.
+  warmHelper();
+  if (helperMissing()) ffmpeg().catch(() => {});
   for (const url of [
     "https://play.music.apple.com/",
     "https://play.itunes.apple.com/",

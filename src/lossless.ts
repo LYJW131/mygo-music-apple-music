@@ -1,90 +1,22 @@
 // Lossless: Apple's ALAC, up to 24-bit/192 kHz, when the app's quality is
 // Lossless and the listener has a wrapper. The wrapper, a wrapper-manager
 // holding their Apple Music account, gives the playlist and the FairPlay key
-// templates; amhelper, the program shipped with the plugin for this platform,
-// fetches the audio from Apple, decrypts it and serves it on this machine as
-// a fragmented MP4 the app plays as it comes. Without a wrapper, or for a
-// song it can't play, the song plays as AAC.
+// templates; amhelper (amhelper.ts) fetches the audio from Apple, decrypts it
+// and serves it on this machine as a fragmented MP4 the app plays as it
+// comes. Without a wrapper, or for a song it can't play, the song plays as
+// AAC.
 
+import { hasWrapper, helperBase, helperMissing, warmHelper } from "./amhelper.ts";
 import { catalog, first, query } from "./api.ts";
 import type { Attributes } from "./types/apple.ts";
 import type { Stream } from "./types/music.ts";
-import { fail, t } from "./util.ts";
 
-interface Helper {
-  proc: HostProcess;
-  /** http://127.0.0.1:<port>/<secret> */
-  base: string;
-}
+export { hasWrapper };
 
 interface Quality {
   sampleRate: number;
   bitDepth: number;
   bandwidth: number;
-}
-
-const settings = () => ({
-  wrapper: host.setting("wrapper").trim(),
-  token: host.setting("wrapperKey").trim(),
-});
-
-/** Whether the listener named a wrapper. */
-export const hasWrapper = (): boolean => !!settings().wrapper;
-
-const program = () => (host.platform === "windows" ? "bin/amhelper.exe" : "bin/amhelper");
-
-// One amhelper at a time, started when first needed and again when the
-// settings change or it ends.
-let helper: Promise<Helper> | null = null;
-let helperConfig = "";
-// The plugin's zip for a platform without amhelper has none: AAC only.
-let missing = false;
-
-function running(): Promise<Helper> {
-  // amhelper keeps key templates and the songs it worked out in cache, so
-  // that a song played before plays at once after a restart.
-  const config = JSON.stringify({ ...settings(), cache: `${host.dataDir}/lossless` });
-  if (helper && helperConfig !== config) {
-    void helper.then((h) => h.proc.kill()).catch(() => {});
-    helper = null;
-  }
-  if (!helper) {
-    helperConfig = config;
-    const started = start(config);
-    helper = started;
-    started.catch(() => {
-      if (helper === started) helper = null;
-    });
-  }
-  return helper;
-}
-
-async function start(config: string): Promise<Helper> {
-  let proc: HostProcess;
-  try {
-    proc = host.spawn(program(), []);
-  } catch (e) {
-    if (/allow/i.test((e as Error).message)) {
-      throw fail("setup", t("Allow Apple Music to start programs in its settings, for lossless"));
-    }
-    missing = true;
-    throw e;
-  }
-  // The key goes over stdin, as arguments are there for any process to read.
-  proc.write(config + "\n");
-  const hello = await Promise.race([proc.readLine(), new Promise<null>((r) => setTimeout(() => r(null), 5000))]);
-  if (!hello) {
-    proc.kill();
-    throw new Error(`amhelper: ${proc.errorOutput().trim().split("\n").pop() ?? "didn't start"}`);
-  }
-  const { port, secret } = JSON.parse(hello) as { port: number; secret: string };
-  const self: Helper = { proc, base: `http://127.0.0.1:${port}/${secret}` };
-  void proc.wait().then(() => {
-    void helper?.then((h) => {
-      if (h === self) helper = null;
-    });
-  });
-  return self;
 }
 
 // Which songs are lossless, and where their master playlist is, as the
@@ -205,7 +137,7 @@ export function prepare(id: string, ahead = false): Promise<Known | null> {
   const current = preparing.get(id);
   if (current && (ahead || !current.ahead)) return current.job;
   const job = (async () => {
-    const [{ base }, a] = await Promise.all([running(), audioOf(id).catch(() => null)]);
+    const [base, a] = await Promise.all([helperBase(), audioOf(id).catch(() => null)]);
     if (a && !a.lossless) {
       remember(id, null);
       return null;
@@ -247,7 +179,7 @@ export async function find(id: string): Promise<void> {
   if (!a?.lossless || known.has(id) || preparing.has(id) || found.has(id)) return;
   if (found.size >= FOUND_MOST) found.clear();
   found.add(id);
-  const { base } = await running();
+  const base = await helperBase();
   const q = playlistQuery(a);
   const res = await fetch(`${base}/find/${id}${q}${q ? "&" : "?"}ahead=1`).catch(() => null);
   await res?.body?.cancel();
@@ -269,7 +201,7 @@ function remember(id: string, q: Known | null): void {
 
 /** Starts amhelper ahead of the first song, if it's going to be wanted. */
 export function warmLossless(): void {
-  if (hasWrapper() && !missing) running().catch(() => {});
+  if (hasWrapper()) warmHelper();
 }
 
 // A wrapper on Cloudflare sleeps after five idle minutes, and the song that
@@ -282,10 +214,10 @@ let wokeAt = 0;
 
 /** Wakes the wrapper ahead of the songs, if it's going to be wanted. */
 export function wakeWrapper(): void {
-  if (!hasWrapper() || missing || Date.now() - wokeAt < WAKE_EVERY) return;
+  if (!hasWrapper() || helperMissing() || Date.now() - wokeAt < WAKE_EVERY) return;
   wokeAt = Date.now();
-  running()
-    .then((h) => fetch(`${h.base}/wake`, { method: "POST" }))
+  helperBase()
+    .then((base) => fetch(`${base}/wake`, { method: "POST" }))
     .catch(() => {});
 }
 
@@ -294,7 +226,7 @@ export function wakeWrapper(): void {
  * amhelper for this platform, no ALAC of it, or the wrapper failing.
  */
 export async function losslessStream(id: string): Promise<Stream | null> {
-  if (!hasWrapper() || missing) return null;
+  if (!hasWrapper() || helperMissing()) return null;
   let q: Known | null;
   try {
     q = await prepare(id);
@@ -304,6 +236,6 @@ export async function losslessStream(id: string): Promise<Stream | null> {
     return null;
   }
   if (!q) return null;
-  const { base } = await running();
+  const base = await helperBase();
   return { url: `${base}/song/${id}.m4a${q.query}`, type: "m4a", quality: "lossless", bitRate: q.bandwidth };
 }

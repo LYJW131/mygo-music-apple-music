@@ -1,7 +1,8 @@
 // Playing a song whole: the web player's playlist for it, its key from
-// Apple's license server, and ffmpeg taking the encryption off as the audio
-// comes in.
+// Apple's license server, and amhelper taking the encryption off as the
+// audio comes in, or ffmpeg where the plugin's zip has no amhelper.
 
+import { helperBase, helperMissing } from "./amhelper.ts";
 import { request } from "./api.ts";
 import { LICENSE, PLAYBACK, UA, WIDEVINE_SYSTEM } from "./constants.ts";
 import { ffmpeg } from "./ffmpeg.ts";
@@ -51,15 +52,20 @@ interface Media {
   /** The key's URI, which the license request names. */
   keyURI: string;
   kid: Uint8Array;
+  /** How long it plays, the encoder's priming with it: the segments' lengths added up. */
+  seconds: number;
 }
 
 async function mediaOf(playlistURL: string): Promise<Media> {
   const text = await (await fetch(playlistURL, { headers: { "User-Agent": UA } })).text();
   let keyURI = "";
   let mapURI = "";
+  let seconds = 0;
   for (const raw of text.split("\n")) {
     const line = raw.trim();
-    if (line.startsWith("#EXT-X-KEY:")) {
+    if (line.startsWith("#EXTINF:")) {
+      seconds += parseFloat(line.slice(8)) || 0;
+    } else if (line.startsWith("#EXT-X-KEY:")) {
       const a = m3u8Attributes(line.slice(11));
       const widevine = (a.KEYFORMAT ?? "").toLowerCase().includes(WIDEVINE_SYSTEM);
       if (a.URI && (widevine || !keyURI)) keyURI = a.URI;
@@ -69,7 +75,12 @@ async function mediaOf(playlistURL: string): Promise<Media> {
     }
   }
   if (!mapURI || !keyURI) throw fail("unavailable", t("Apple Music has no AAC of this song"));
-  return { media: mapURI, keyURI, kid: b64decode(keyURI.slice(keyURI.indexOf(",") + 1)) };
+  return {
+    media: mapURI,
+    keyURI,
+    kid: b64decode(keyURI.slice(keyURI.indexOf(",") + 1)),
+    seconds: Math.round(seconds * 1e5) / 1e5,
+  };
 }
 
 /** The song's content key, in hex, from Apple's license server. */
@@ -99,10 +110,10 @@ async function contentKey(id: string, keyURI: string, kid: Uint8Array): Promise<
   return hex(match.key);
 }
 
-// What it takes to play a song, once worked out: where its encrypted audio is
-// and its key. Neither changes, so they're kept, and a song played before
-// starts without asking Apple anything. A few thousand of them are a few
-// hundred kilobytes.
+// What it takes to play a song, once worked out: where its encrypted audio is,
+// its key and its length. None changes, so they're kept, and a song played
+// before starts without asking Apple anything. A few thousand of them are a
+// few hundred kilobytes.
 
 const KEYS_KEPT = 3000;
 
@@ -111,11 +122,14 @@ interface Kept {
   m: string;
   /** key */
   k: string;
+  /** seconds, which songs kept by 0.2.6 and before lack */
+  s?: number;
 }
 
 interface Resolved {
   media: string;
   key: string;
+  seconds: number;
   /** Whether it was kept from before rather than asked for now. */
   kept: boolean;
 }
@@ -127,10 +141,10 @@ function kept(): Record<string, Kept> {
   return keptSongs;
 }
 
-function remember(id: string, media: string, key: string): void {
+function remember(id: string, media: string, key: string, seconds: number): void {
   const all = kept();
   delete all[id];
-  all[id] = { m: media, k: key };
+  all[id] = { m: media, k: key, s: seconds };
   const ids = Object.keys(all);
   for (let i = 0; i < ids.length - KEYS_KEPT; i++) delete all[ids[i]];
   host.storage.set("resolved", all);
@@ -147,23 +161,24 @@ function forget(id: string): void {
 const resolving = new Map<string, Promise<Resolved>>();
 
 /** Whether the song is worked out already, or being worked out. */
-export const resolvedOrResolving = (id: string): boolean => !!kept()[id] || resolving.has(id);
+export const resolvedOrResolving = (id: string): boolean => !!kept()[id]?.s || resolving.has(id);
 
 /**
- * The song's audio and key: kept, or from webPlayback, its playlist and a
- * license. Asked for twice at once, as the app asks ahead, it's worked out
- * once.
+ * The song's audio, key and length: kept, or from webPlayback, its playlist
+ * and a license. A song kept without its length has its playlist read again,
+ * and keeps its key if the audio is where it was. Asked for twice at once,
+ * as the app asks ahead, it's worked out once.
  */
 export function resolve(id: string): Promise<Resolved> {
   const song = kept()[id];
-  if (song) return Promise.resolve({ media: song.m, key: song.k, kept: true });
+  if (song?.s) return Promise.resolve({ media: song.m, key: song.k, seconds: song.s, kept: true });
   let job = resolving.get(id);
   if (!job) {
     job = (async () => {
-      const { media, keyURI, kid } = await mediaOf(await webPlayback(id));
-      const key = await contentKey(id, keyURI, kid);
-      remember(id, media, key);
-      return { media, key, kept: false };
+      const { media, keyURI, kid, seconds } = await mediaOf(await webPlayback(id));
+      const key = song && song.m === media ? song.k : await contentKey(id, keyURI, kid);
+      remember(id, media, key, seconds);
+      return { media, key, seconds, kept: false };
     })();
     resolving.set(id, job);
     job.finally(() => resolving.delete(id)).catch(() => {});
@@ -171,11 +186,34 @@ export function resolve(id: string): Promise<Resolved> {
   return job;
 }
 
-// ffmpeg takes the encryption off as the audio comes in from Apple, and
-// answers the one request the app makes for it on this machine, as ADTS the
-// app plays as it arrives. The audio is copied as it is. A fragmented MP4 from
-// ffmpeg says nothing of its length, and MyGo 0.1.22 reads one through before
-// it plays; ADTS it takes its length for from the song's duration.
+// amhelper takes the encryption off as the audio comes in from Apple, and
+// serves it on this machine as a fragmented MP4 that says its length and
+// skips the encoder's priming, which the app plays itself as it arrives. The
+// AAC is copied as it is. The song is handed over first, with its key, in a
+// request of its own: the address the app is given names the song only.
+// amhelper opens the file at Apple as it's handed over, and says so if Apple
+// has it no longer.
+
+async function viaHelper(base: string, id: string, song: Resolved): Promise<string> {
+  const res = await fetch(`${base}/aac/${id}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ media: song.media, key: song.key, seconds: song.seconds }),
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { code?: string; message?: string };
+    // Only Apple no longer having the file is worth asking for the song afresh.
+    throw Object.assign(new Error(`amhelper: ${body.message ?? res.status}`), { stale: body.code === "media" });
+  }
+  await res.body?.cancel();
+  return `${base}/aac/${id}.m4a`;
+}
+
+// Where the plugin's zip has no amhelper, ffmpeg takes the encryption off,
+// and answers the one request the app makes for it on this machine, as ADTS
+// the app plays as it arrives. The audio is copied as it is. A fragmented MP4
+// from ffmpeg says nothing of its length, and MyGo 0.1.22 reads one through
+// before it plays; ADTS it takes its length for from the song's duration.
 // The app keeps what it fetched in its own cache. No more than a few wait at
 // a time, for songs skipped before the app asked for them.
 
@@ -241,15 +279,29 @@ export async function stream({ id, quality }: { id: string; quality?: string }):
   }
   needAccount();
   let song = await resolve(id);
-  let url: string;
   try {
-    url = await serve(song.media, song.key);
+    return await play(id, song);
   } catch (e) {
-    if (!song.kept || codeOf(e)) throw e;
+    if (!song.kept || codeOf(e) || (e as { stale?: boolean }).stale === false) throw e;
     // What was kept no longer opens, as Apple may have moved the audio: ask again.
     forget(id);
     song = await resolve(id);
-    url = await serve(song.media, song.key);
+    return await play(id, song);
   }
-  return { url, type: "aac", quality: "high", bitRate: 256000 };
+}
+
+async function play(id: string, song: Resolved): Promise<Stream> {
+  let base: string | null = null;
+  if (!helperMissing()) {
+    try {
+      base = await helperBase();
+    } catch (e) {
+      // Not allowed to start programs: neither would ffmpeg be.
+      if (codeOf(e)) throw e;
+      if (!helperMissing())
+        console.log(`Apple Music: playing through ffmpeg, as amhelper didn't start: ${(e as Error).message}`);
+    }
+  }
+  if (base) return { url: await viaHelper(base, id, song), type: "m4a", quality: "high", bitRate: 256000 };
+  return { url: await serve(song.media, song.key), type: "aac", quality: "high", bitRate: 256000 };
 }

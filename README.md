@@ -9,6 +9,7 @@
 1. 打开 MyGo Music，在「设置 → 插件 → `+`」里粘贴 `https://github.com/LYJW131/mygo-music-apple-music`。
 2. 来源选择 **Apple Music**。
 3. 点登录，使用有效订阅的 Apple 账户登录。
+4. 在「设置 → 插件 → Apple Music」里允许启动程序。插件自带的 `amhelper` 在本机解密歌曲，交给 MyGo Music 直接播放，不用另装 ffmpeg；只有 Windows arm64 这类没有 `amhelper` 的平台才要装 [ffmpeg](https://ffmpeg.org)。
 
 ## 功能
 

@@ -5,9 +5,10 @@
 // Songs play whole, as the 256 kbps AAC the web player plays. Apple encrypts
 // it with Widevine: the plugin asks Apple's license server for the key as the
 // web player would, with a Widevine CDM written here in plain TypeScript, and
-// ffmpeg takes the encryption off, copying the audio as it is into an .m4a the
-// app plays. Nothing is re-encoded. With the listener's wrapper, songs play
-// lossless as ALAC instead (lossless.ts).
+// amhelper, the program shipped with the plugin, takes the encryption off,
+// copying the audio as it is into an .m4a the app plays itself (ffmpeg does,
+// where the plugin's zip has no amhelper). Nothing is re-encoded. With the
+// listener's wrapper, songs play lossless as ALAC instead (lossless.ts).
 //
 // These exports are the plugin: what MyGo Music calls. While the app waits on
 // one, what's fetched of the library ahead waits too (background.ts).

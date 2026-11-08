@@ -11,10 +11,11 @@ import (
 // prefix, as the white-box leaves a shorter tail as it is.
 type xorDecrypter byte
 
-func (x xorDecrypter) DecryptSample(s []byte) {
+func (x xorDecrypter) DecryptSample(s []byte, _ sampleEncryption) error {
 	for i := range len(s) / 16 * 16 {
 		s[i] ^= byte(x)
 	}
+	return nil
 }
 
 const timescale = 96000
@@ -64,8 +65,8 @@ func TestDecryptStreamSplitsAndDecrypts(t *testing.T) {
 	var out bytes.Buffer
 	flushes := 0
 	keys := map[int]sampleDecrypter{1: xorDecrypter(0x5a), 2: xorDecrypter(0xa5)}
-	err := decryptStream(bytes.NewReader(in), &out, 2.5, func(desc int, _ bool) (sampleDecrypter, error) { return keys[desc], nil }, nil,
-		func() { flushes++ })
+	err := decryptStream(bytes.NewReader(in), &out, func(desc int, _ bool) (sampleDecrypter, error) { return keys[desc], nil },
+		streamOptions{seconds: 2.5, flush: func() { flushes++ }})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +111,7 @@ func TestDecryptStreamSplitsAndDecrypts(t *testing.T) {
 	}
 	for i, s := range got {
 		want := bytes.Clone(plain[i])
-		keys[1+i/351].DecryptSample(want)
+		_ = keys[1+i/351].DecryptSample(want, sampleEncryption{})
 		if !bytes.Equal(s.Data, want) {
 			t.Fatalf("sample %d isn't decrypted with its fragment's key", i)
 		}
@@ -122,8 +123,8 @@ func TestDecryptStreamSplitsAndDecrypts(t *testing.T) {
 
 func TestDecryptStreamRejectsTruncatedMedia(t *testing.T) {
 	in, _ := appleLike(t)
-	err := decryptStream(bytes.NewReader(in[:len(in)-100]), &bytes.Buffer{}, 0,
-		func(int, bool) (sampleDecrypter, error) { return xorDecrypter(1), nil }, nil, func() {})
+	err := decryptStream(bytes.NewReader(in[:len(in)-100]), &bytes.Buffer{},
+		func(int, bool) (sampleDecrypter, error) { return xorDecrypter(1), nil }, streamOptions{flush: func() {}})
 	if err == nil {
 		t.Fatal("a cut-off file decrypted without an error")
 	}
@@ -156,7 +157,7 @@ func TestDecryptStreamReplacesAWrongKey(t *testing.T) {
 		return true
 	}
 	var out bytes.Buffer
-	if err := decryptStream(bytes.NewReader(in), &out, 0, keyOf, isPlain, func() {}); err != nil {
+	if err := decryptStream(bytes.NewReader(in), &out, keyOf, streamOptions{check: isPlain, flush: func() {}}); err != nil {
 		t.Fatal(err)
 	}
 	if asked[1] != 0 || asked[2] != 1 {
@@ -172,7 +173,7 @@ func TestDecryptStreamReplacesAWrongKey(t *testing.T) {
 			ss, _ := frag.GetFullSamples(f.Init.Moov.Mvex.Trex)
 			for _, s := range ss {
 				want := bytes.Clone(plain[i])
-				right[1+i/351].DecryptSample(want)
+				_ = right[1+i/351].DecryptSample(want, sampleEncryption{})
 				if !bytes.Equal(s.Data, want) {
 					t.Fatalf("sample %d isn't decrypted with the right key", i)
 				}
@@ -184,9 +185,9 @@ func TestDecryptStreamReplacesAWrongKey(t *testing.T) {
 
 func TestDecryptStreamFailsWhenTheKeyStaysWrong(t *testing.T) {
 	in, _ := appleLike(t)
-	err := decryptStream(bytes.NewReader(in), &bytes.Buffer{}, 0,
+	err := decryptStream(bytes.NewReader(in), &bytes.Buffer{},
 		func(int, bool) (sampleDecrypter, error) { return xorDecrypter(0x33), nil },
-		func([][]byte) bool { return false }, func() {})
+		streamOptions{check: func([][]byte) bool { return false }, flush: func() {}})
 	if err == nil {
 		t.Fatal("noise was written as audio")
 	}

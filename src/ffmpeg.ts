@@ -1,5 +1,6 @@
 // ffmpeg, which takes the encryption off the audio and fetches the covers
-// Apple serves too slowly for the app.
+// Apple serves too slowly for the app where the plugin's zip has no amhelper
+// to do it (amhelper.ts).
 
 import { fail, t } from "./util.ts";
 

@@ -2,8 +2,9 @@
 
 A [MyGo Music](https://github.com/egoist/mygo-music) plugin: Apple Music's catalog, the listener's library and whole
 songs as 256 kbps AAC, through the music.apple.com web player's API. Widevine keys come from a CDM written here in
-TypeScript (`src/widevine/`); ffmpeg decrypts. Lossless (ALAC) goes through the listener's wrapper-manager and
-`amhelper`, a Go program shipped in the plugin (`helper/`). The plugin spec is MyGo Music's README ("Plugins") and
+TypeScript (`src/widevine/`); `amhelper`, a Go program shipped in the plugin (`helper/`), decrypts, and MyGo (0.1.21
+on) plays the fragmented MP4 it serves itself. ffmpeg does instead only where the zip has no amhelper. Lossless (ALAC)
+goes through the listener's wrapper-manager and amhelper. The plugin spec is MyGo Music's README ("Plugins") and
 `internal/plugin/*.go`.
 
 ## Commands
@@ -16,7 +17,8 @@ npm run test:helper  # go vet + go test in helper/
 npm run helper       # builds amhelper for this machine into dist/plugin/bin
 npm run format       # prettier --write
 npm run test:live    # signed out, real Apple API (not in CI)
-APPLE_MUSIC_TOKEN_FILE=… npm run test:signed-in   # signed in, plays one song through ffmpeg (not in CI)
+APPLE_MUSIC_TOKEN_FILE=… npm run test:signed-in   # signed in, plays one song through amhelper and ffmpeg (not in CI;
+                                                  # npm run helper after its build, or it plays through ffmpeg twice)
 ```
 
 Node 22.18+ runs the `.ts` scripts and tests directly (type stripping); there is no tsx. Go (`helper/go.mod`) builds
@@ -30,20 +32,24 @@ and tests amhelper.
   `session.ts` tokens, `account.ts` sign-in, `models.ts` Apple resources → MyGo shapes.
 - Pages: `browse.ts` (home, charts, recently added), `search.ts`, `library.ts`, `pages.ts` (album/artist/playlist),
   `stations.ts`, `lyrics.ts` (TTML).
-- Playing: `playback.ts` (webPlayback → m3u8 → license → ffmpeg `-listen` on 127.0.0.1), `prefetch.ts` (warm
+- Playing: `playback.ts` (webPlayback → m3u8 → license; the song handed to amhelper as `POST aac/<id>` with its key
+  and length, the segments' EXTINFs added up, and played from `aac/<id>.m4a`; ffmpeg `-listen` on 127.0.0.1 as ADTS
+  where there's no amhelper), `amhelper.ts` (starts it; config on stdin), `prefetch.ts` (warm
   connections, resolve the first 3 songs of a page, ≤15/min; every list the app may play from is noted, home's only
   where no page opened has the song, and a song played lossless works out the 12 after it; a station's 10 are worked out
   as they come; `lyrics`, asked as every song starts, even one played from the app's cache, counts as playing, which
   leaves the wrapper asleep), `ffmpeg.ts`, `artwork.ts` (private playlist covers are slow blobstore links, kept locally
-  via ffmpeg).
+  by amhelper's `POST cover/<name>`, or ffmpeg).
 - Listening history: `activity.ts` answers `played`, which MyGo calls as a song starts, by posting a start to Apple's
   play activity service as MusicKit JS does (`universal-activity-service.itunes.apple.com/play`), with the previous
   song's end timed by the clock. Durations come from `toTrack`. The `listeningHistory` setting set to `off` stops it.
-- Lossless: `lossless.ts` starts amhelper (config on stdin: wrapper, key, cache dir; it answers `{port, secret}`),
-  notes each catalog song's `audioTraits` and `extendedAssetUrls.enhancedHls`, and asks amhelper to `prepare` a song
+- Lossless: `lossless.ts` (through `amhelper.ts`, whose config on stdin is wrapper, key, cache dir and covers dir; it
+  answers `{port, secret}`, and runs without a wrapper for AAC and covers) notes each catalog song's `audioTraits` and `extendedAssetUrls.enhancedHls`, and asks amhelper to `prepare` a song
   and serve `song/<id>.m4a`; `null` falls back to AAC. Following amdl, lossless songs use the catalog's master
   playlist and Hi-Res ones the wrapper's `/m3u8` first (the catalog's sometimes lacks 88.2–192 kHz).
-- `helper/`: `main.go` routes, `wrapper.go` the wrapper client (one request at a time, `queue.go` puts played songs
+- `helper/`: `main.go` routes, `aac.go` the AAC (CENC, AES-CTR with each sample's IV from `senc`, and an edit list that
+  skips the encoder's 2112 frames of priming), `cover.go` playlist covers (JPEG, shrunk to 600 wide), `wrapper.go` the
+  wrapper client (one request at a time, `queue.go` puts played songs
   before ones prepared ahead), `hls.go` playlists, `mp4.go` decrypts Apple's 15 s fragments into ~1 s ones as they
   arrive, `alac.go` checks a key's first samples look like ALAC (a wrong template gives noise, not an error),
   `store.go` the disk cache (templates and tracks ≤2000 each, tracks a week; a bad template or a 404 media file is fetched again).
@@ -79,7 +85,7 @@ The bundle runs in MyGo's moejs runtime, not Node:
 - Erasable TypeScript only (no `enum`, `namespace`, parameter properties): `erasableSyntaxOnly` is on, as Node strips
   types. Relative imports end in `.ts`.
 - Errors the app should act on carry a code: `fail("signIn" | "setup" | "unavailable" | "unsupported", message)`.
-- `host.storage` keys: `mediaUserToken`, `storefront`, `profile` (name and picture, a day), `devToken`, `resolved` (song → media + key, ≤3000), `covers`,
+- `host.storage` keys: `mediaUserToken`, `storefront`, `profile` (name and picture, a day), `devToken`, `resolved` (song → media + key + seconds, ≤3000; ones kept without seconds have their playlist read again), `covers`,
   `quality` (the app's last asked), `lossless` (song → its ALAC or none, a week).
 
 ## Conventions

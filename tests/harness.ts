@@ -3,6 +3,7 @@
 // node --experimental-vm-modules.
 
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -14,13 +15,21 @@ export interface Options {
   storage?: Map<string, unknown>;
   settings?: Record<string, string>;
   language?: "en" | "zh-CN";
+  /** Leaves amhelper out, as the plugin's zip for a platform without it does. */
+  withoutHelper?: boolean;
 }
 
 // The plugin's exports, as the app calls them.
 export type Plugin = Record<string, (...args: any[]) => any>;
 
 function spawnProcess(command: string, args: string[]): HostProcess {
-  const child = spawn(command, args, { stdio: ["pipe", "pipe", "pipe"] });
+  // As MyGo does: a path of the plugin's own is in its folder, and one that
+  // isn't there fails at once.
+  if (!command.startsWith("/") && /[/\\]/.test(command)) {
+    command = join(dist, command);
+    if (!existsSync(command)) throw new Error(`exec: ${command}: no such file or directory`);
+  }
+  const child = spawn(command, args, { stdio: ["pipe", "pipe", "pipe"], cwd: dist });
   let err = "";
   let out = "";
   const lines: string[] = [];
@@ -70,7 +79,12 @@ function spawnProcess(command: string, args: string[]): HostProcess {
   };
 }
 
-export async function load({ storage = new Map(), settings = {}, language = "zh-CN" }: Options = {}) {
+export async function load({
+  storage = new Map(),
+  settings = {},
+  language = "zh-CN",
+  withoutHelper = false,
+}: Options = {}) {
   const locale = JSON.parse(await readFile(join(dist, "locales/zh-CN.json"), "utf8")) as Record<string, string>;
   const host: Host = {
     platform: process.platform === "win32" ? "windows" : process.platform,
@@ -87,7 +101,10 @@ export async function load({ storage = new Map(), settings = {}, language = "zh-
     language: () => language,
     removeDataDir: () => {},
     openURL: (url) => console.log("openURL", url),
-    spawn: spawnProcess,
+    spawn: (command, args) => {
+      if (withoutHelper && command.includes("amhelper")) throw new Error(`exec: ${command}: no such file or directory`);
+      return spawnProcess(command, args);
+    },
   };
   const source = await readFile(join(dist, "index.js"), "utf8");
   const mod = new SourceTextModule(source, {

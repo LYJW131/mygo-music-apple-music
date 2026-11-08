@@ -10,6 +10,9 @@ Hi-Res Lossless ALAC up to 24-bit/192 kHz (set up [below](#lossless)).
 1. Open MyGo Music, and paste `https://github.com/LYJW131/mygo-music-apple-music` in Settings > Plugins > `+`.
 2. Choose **Apple Music** as the source.
 3. Sign in with an Apple account that has a subscription.
+4. Allow Apple Music to start programs in Settings > Plugins > Apple Music. The plugin's own `amhelper` decrypts songs
+   on this machine and MyGo Music plays them itself, with nothing else to install; only on a platform it doesn't come
+   for, such as Windows on arm64, does it play through [ffmpeg](https://ffmpeg.org), which you install.
 
 ## Features
 

@@ -1,5 +1,5 @@
 // Signed in, against the real Apple Music: account, library, lyrics, and one
-// song played whole (license, then ffmpeg). The token comes from
+// song played whole (license, then amhelper, and ffmpeg as without it). The token comes from
 // APPLE_MUSIC_TOKEN_FILE and is never printed.
 import assert from "node:assert/strict";
 import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
@@ -27,10 +27,27 @@ const step = async (name: string, fn: () => Promise<string | undefined>) => {
 
 const id = process.argv[2] || "1783644604";
 await step("account", async () => JSON.stringify(await api.account()));
-await step("stream", async () => {
-  const s = await api.stream({ id, quality: "high" });
-  const body = Buffer.from(await (await fetch(s.url)).arrayBuffer());
-  const path = join(mkdtempSync(join(tmpdir(), "apple-")), "song.m4a");
+// The song through amhelper (npm run helper puts it in dist/plugin/bin), and
+// through ffmpeg as on a platform without it: the same AAC, so the same
+// audio once amhelper's edit list has left out the encoder's priming.
+const withoutHelper = (await load({ storage: new Map([["mediaUserToken", token]]), withoutHelper: true })).api;
+const dir = mkdtempSync(join(tmpdir(), "apple-"));
+const decoded: Record<string, Buffer> = {};
+const play = (name: string, plugin: typeof api, type: string) => async () => {
+  const t0 = Date.now();
+  const s = await plugin.stream({ id, quality: "high" });
+  assert.equal(s.type, type);
+  const res = await fetch(s.url);
+  const reader = res.body!.getReader();
+  const parts: Uint8Array[] = [];
+  let first = 0;
+  for (let r = await reader.read(); !r.done; r = await reader.read()) {
+    first ||= Date.now() - t0;
+    parts.push(r.value);
+  }
+  const all = Date.now() - t0;
+  const body = Buffer.concat(parts);
+  const path = join(dir, `${name}.${type}`);
   writeFileSync(path, body);
   const probe = execFileSync("ffprobe", [
     "-v",
@@ -45,16 +62,31 @@ await step("stream", async () => {
     .trim()
     .replace(/\n/g, " | ");
   // Decoding the whole song catches audio that was left encrypted.
-  const errors = execFileSync("ffmpeg", ["-v", "error", "-i", path, "-f", "null", "-"], {
+  const pcm = execFileSync("ffmpeg", ["-v", "error", "-i", path, "-f", "s16le", "-"], {
     stdio: ["ignore", "pipe", "pipe"],
-  }).toString();
-  assert.equal(errors.trim(), "");
-  return `${(body.length / 1e6).toFixed(1)} MB, ${probe}`;
+    maxBuffer: 1 << 30,
+  });
+  decoded[name] = pcm;
+  return `${(body.length / 1e6).toFixed(1)} MB, first bytes ${first} ms, all ${all} ms, ${probe}`;
+};
+await step("stream (amhelper)", play("amhelper", api, "m4a"));
+await step("stream (ffmpeg, without amhelper)", play("ffmpeg", withoutHelper, "aac"));
+await step("the same audio both ways", async () => {
+  const { amhelper, ffmpeg } = decoded;
+  assert.ok(amhelper && ffmpeg, "a stream failed");
+  const priming = 2112 * 4; // frames of 16-bit stereo
+  assert.equal(ffmpeg.length - amhelper.length, priming, "amhelper's is other than the priming shorter");
+  assert.ok(
+    ffmpeg.subarray(0, priming).every((b) => b === 0),
+    "the priming isn't silence",
+  );
+  assert.ok(ffmpeg.subarray(priming).equals(amhelper), "the audio differs");
+  return `${amhelper.length / 4} frames, identical past the priming`;
 });
 await step("stream again (key kept)", async () => {
   const s = await api.stream({ id, quality: "high" });
   await (await fetch(s.url)).arrayBuffer();
-  return s.url;
+  return s.url.replace(/\/[0-9a-f]{32}\//, "/<secret>/");
 });
 await step("lyrics", async () => {
   const l: Lyrics | null = await api.lyrics({ id });

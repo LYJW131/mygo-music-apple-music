@@ -1,17 +1,23 @@
-// amhelper plays Apple Music's ALAC for the MyGo Music plugin: it asks a
-// wrapper for the playlist and the key templates, fetches the encrypted file
-// from Apple's CDN, and serves it decrypted, a fragment at a time, on
-// 127.0.0.1, where the app plays it.
+// amhelper plays Apple Music for the MyGo Music plugin, decrypting Apple's
+// encrypted files as they come from its CDN and serving them, a fragment at
+// a time, on 127.0.0.1, where the app plays them. The AAC the plugin gets the
+// key of itself (aac.go). The ALAC it asks a wrapper for: the playlist and
+// the key templates. It also keeps the covers of the listener's own
+// playlists (cover.go).
 //
 // The plugin starts it and writes one JSON line to its stdin, {"wrapper",
-// "token", "cache"}; it answers one line, {"port", "secret"}, and serves under
-// /<secret>/ until its stdin closes:
+// "token", "cache", "covers"}, the wrapper empty when there is none; it
+// answers one line, {"port", "secret"}, and serves under /<secret>/ until its
+// stdin closes:
 //
+//	POST /<secret>/aac/<id>            {media, key, seconds}: the song's AAC
+//	GET /<secret>/aac/<id>.m4a         that song, decrypted, as fragmented MP4
+//	POST /<secret>/cover/<name>        {url}: keeps a playlist cover in covers
 //	GET /<secret>/status               the wrapper's {ready, regions}
 //	POST /<secret>/wake                wakes the wrapper (one on Cloudflare sleeps)
 //	GET /<secret>/find/<id>            resolves the song only, without its keys
 //	GET /<secret>/prepare/<id>         resolves the song and fetches its keys
-//	GET /<secret>/song/<id>.m4a        the song, decrypted, as fragmented MP4
+//	GET /<secret>/song/<id>.m4a        the song's ALAC, decrypted, as fragmented MP4
 //
 // find, prepare and song take maxRate and maxBits, limits on the variant chosen;
 // ahead=1, for a song worked out before it's played, which waits behind the
@@ -22,7 +28,8 @@
 // device playlist first, which lists the 88.2, 96 and 192 kHz ALAC that the
 // catalog's sometimes leaves out, and falls back to master. prepare answers
 // the variant and how long each step took. Errors are {code, message}: code
-// "noALAC" when the song has none, "wrapper" when the wrapper failed.
+// "noALAC" when the song has none, "wrapper" when the wrapper failed or
+// there is none.
 package main
 
 import (
@@ -50,7 +57,8 @@ import (
 type config struct {
 	Wrapper string `json:"wrapper"`
 	Token   string `json:"token"`
-	Cache   string `json:"cache"` // a folder to keep keys and songs in; "" for none
+	Cache   string `json:"cache"`  // a folder to keep keys and songs in; "" for none
+	Covers  string `json:"covers"` // a folder to keep playlist covers in; "" for none
 }
 
 func main() {
@@ -66,9 +74,12 @@ func main() {
 		log.Fatalf("config: %v", err)
 	}
 	st := &store{dir: cfg.Cache}
-	w, err := newWrapper(cfg.Wrapper, cfg.Token, st)
-	if err != nil {
-		log.Fatal(err)
+	// Without a wrapper there's AAC and covers, and no ALAC.
+	var w *wrapper
+	if strings.TrimSpace(cfg.Wrapper) != "" {
+		if w, err = newWrapper(cfg.Wrapper, cfg.Token, st); err != nil {
+			log.Fatal(err)
+		}
 	}
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -76,17 +87,30 @@ func main() {
 	}
 	secret := make([]byte, 16)
 	_, _ = rand.Read(secret)
-	s := &server{wrapper: w, store: st, cdn: &http.Client{}, tracks: newLRU[cachedTrack](tracksKept), resolving: map[string]*resolveCall{}}
+	s := &server{wrapper: w, store: st, cdn: &http.Client{}, tracks: newLRU[cachedTrack](tracksKept), resolving: map[string]*resolveCall{},
+		aac: newLRU[aacSong](aacKept), aacOpened: map[string]*openedMedia{}, covers: newCovers(cfg.Covers)}
 	for k, t := range st.tracks() {
 		s.tracks.put(k, t)
 	}
 	prefix := "/" + hex.EncodeToString(secret)
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET "+prefix+"/status", s.status)
-	mux.HandleFunc("POST "+prefix+"/wake", s.wake)
-	mux.HandleFunc("GET "+prefix+"/find/{id}", s.findOnly)
-	mux.HandleFunc("GET "+prefix+"/prepare/{id}", s.prepare)
-	mux.HandleFunc("GET "+prefix+"/song/{file}", s.song)
+	mux.HandleFunc("POST "+prefix+"/aac/{id}", s.aacRegister)
+	mux.HandleFunc("GET "+prefix+"/aac/{file}", s.aacSongFile)
+	mux.HandleFunc("POST "+prefix+"/cover/{name}", s.cover)
+	needsWrapper := func(h http.HandlerFunc) http.HandlerFunc {
+		return func(rw http.ResponseWriter, r *http.Request) {
+			if s.wrapper == nil {
+				reply(rw, http.StatusBadGateway, errorBody{"wrapper", "no wrapper set"})
+				return
+			}
+			h(rw, r)
+		}
+	}
+	mux.HandleFunc("GET "+prefix+"/status", needsWrapper(s.status))
+	mux.HandleFunc("POST "+prefix+"/wake", needsWrapper(s.wake))
+	mux.HandleFunc("GET "+prefix+"/find/{id}", needsWrapper(s.findOnly))
+	mux.HandleFunc("GET "+prefix+"/prepare/{id}", needsWrapper(s.prepare))
+	mux.HandleFunc("GET "+prefix+"/song/{file}", needsWrapper(s.song))
 	go func() { log.Fatal(http.Serve(l, mux)) }()
 
 	hello, _ := json.Marshal(map[string]any{"port": l.Addr().(*net.TCPAddr).Port, "secret": hex.EncodeToString(secret)})
@@ -96,13 +120,16 @@ func main() {
 }
 
 type server struct {
-	wrapper *wrapper
+	wrapper *wrapper // nil without one
 	store   *store
 	cdn     *http.Client
+	covers  *covers
 
 	mu        sync.Mutex
 	tracks    *lru[cachedTrack]
 	resolving map[string]*resolveCall
+	aac       *lru[aacSong]           // the songs handed over as AAC
+	aacOpened map[string]*openedMedia // their files, opened ahead of the app's request
 }
 
 type resolveCall struct {
@@ -384,7 +411,7 @@ func (s *server) song(w http.ResponseWriter, r *http.Request) {
 	flusher, _ := w.(http.Flusher)
 	headers := time.Since(start)
 	var firstAudio time.Duration
-	err = decryptStream(bufio.NewReaderSize(body, 1<<20), w, t.Seconds, func(desc int, fresh bool) (sampleDecrypter, error) {
+	err = decryptStream(bufio.NewReaderSize(body, 1<<20), w, func(desc int, fresh bool) (sampleDecrypter, error) {
 		// Apple's sample descriptions are 1-based and keyed in playlist order;
 		// one past the keys gets the first, as amdl does.
 		i := desc - 1
@@ -399,15 +426,15 @@ func (s *server) song(w http.ResponseWriter, r *http.Request) {
 			}
 			keys[i] = k
 		}
-		return keys[i], nil
-	}, decryptsALAC, func() {
+		return fairplayKey{keys[i]}, nil
+	}, streamOptions{seconds: t.Seconds, check: decryptsALAC, flush: func() {
 		if flusher != nil {
 			flusher.Flush()
 		}
 		if firstAudio == 0 && time.Since(start) > headers {
 			firstAudio = time.Since(start)
 		}
-	})
+	}})
 	if err != nil && ctx.Err() == nil {
 		log.Printf("song %s: %v", id, err)
 		// Ending the answer as if the song were whole would have the app

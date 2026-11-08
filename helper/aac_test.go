@@ -223,3 +223,45 @@ func TestAACHandOverAndServe(t *testing.T) {
 		}
 	}
 }
+
+// trackedBody notes whether it was closed.
+type trackedBody struct {
+	io.Reader
+	closed bool
+}
+
+func (b *trackedBody) Close() error { b.closed = true; return nil }
+
+func TestExpiryLeavesAClaimedFileOpen(t *testing.T) {
+	s := &server{aacOpened: map[string]*openedMedia{}}
+	opened := func() (*openedMedia, *trackedBody) {
+		body := &trackedBody{Reader: strings.NewReader("")}
+		return &openedMedia{res: &http.Response{Body: body}, cancel: func() {}}, body
+	}
+
+	// Not asked for in time: closed.
+	o, body := opened()
+	s.aacOpened["1"] = o
+	s.expireOpened("1", o)
+	if !body.closed || s.aacOpened["1"] != nil {
+		t.Fatal("a file nobody asked for was left open")
+	}
+
+	// The timer firing just after the app's request took the file.
+	o, body = opened()
+	s.aacOpened["1"] = o
+	delete(s.aacOpened, "1") // as aacSongFile does
+	s.expireOpened("1", o)
+	if body.closed {
+		t.Fatal("a file the app was playing was closed under it")
+	}
+
+	// Handed over again since: the newer file stays.
+	o, body = opened()
+	newer, newerBody := opened()
+	s.aacOpened["1"] = newer
+	s.expireOpened("1", o)
+	if body.closed || newerBody.closed || s.aacOpened["1"] != newer {
+		t.Fatal("expiring an old file touched the newer one")
+	}
+}

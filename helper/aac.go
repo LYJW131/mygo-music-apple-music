@@ -133,16 +133,24 @@ func (s *server) aacRegister(w http.ResponseWriter, r *http.Request) {
 		old.close()
 	}
 	s.aacOpened[id] = opened
-	opened.timer = time.AfterFunc(openedFor, func() {
-		s.mu.Lock()
-		if s.aacOpened[id] == opened {
-			delete(s.aacOpened, id)
-		}
-		s.mu.Unlock()
-		opened.close()
-	})
+	opened.timer = time.AfterFunc(openedFor, func() { s.expireOpened(id, opened) })
 	s.mu.Unlock()
 	reply(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// expireOpened closes a file opened for a song the app didn't ask for in
+// time. The timer may fire as the app's request takes the file, too late to
+// be stopped: then the file is the request's, and stays open.
+func (s *server) expireOpened(id string, opened *openedMedia) {
+	s.mu.Lock()
+	unclaimed := s.aacOpened[id] == opened
+	if unclaimed {
+		delete(s.aacOpened, id)
+	}
+	s.mu.Unlock()
+	if unclaimed {
+		opened.close()
+	}
 }
 
 func (o *openedMedia) close() {

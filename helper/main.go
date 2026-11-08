@@ -375,7 +375,8 @@ func (s *server) song(w http.ResponseWriter, r *http.Request) {
 		log.Printf("song %s: the file worked out before is gone (HTTP %d); working it out again", id, res.StatusCode)
 		s.forgetTrack(req)
 	}
-	defer res.Body.Close()
+	body := newResumingBody(ctx, s.cdn, t.MediaURL, id, res)
+	defer body.Close()
 	w.Header().Set("Content-Type", "audio/mp4")
 	w.Header().Set("X-Sample-Rate", strconv.Itoa(t.SampleRate))
 	w.Header().Set("X-Bit-Depth", strconv.Itoa(t.BitDepth))
@@ -383,7 +384,7 @@ func (s *server) song(w http.ResponseWriter, r *http.Request) {
 	flusher, _ := w.(http.Flusher)
 	headers := time.Since(start)
 	var firstAudio time.Duration
-	err = decryptStream(bufio.NewReaderSize(res.Body, 1<<20), w, t.Seconds, func(desc int, fresh bool) (sampleDecrypter, error) {
+	err = decryptStream(bufio.NewReaderSize(body, 1<<20), w, t.Seconds, func(desc int, fresh bool) (sampleDecrypter, error) {
 		// Apple's sample descriptions are 1-based and keyed in playlist order;
 		// one past the keys gets the first, as amdl does.
 		i := desc - 1
@@ -409,7 +410,9 @@ func (s *server) song(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil && ctx.Err() == nil {
 		log.Printf("song %s: %v", id, err)
-		return
+		// Ending the answer as if the song were whole would have the app
+		// play what came and move on to the next song: break it instead.
+		panic(http.ErrAbortHandler)
 	}
 	if err == nil {
 		ms := func(d time.Duration) int64 { return d.Milliseconds() }

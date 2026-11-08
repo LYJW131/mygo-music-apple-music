@@ -15,23 +15,21 @@
 
 ### 用 media-user-token 登录
 
-MyGo Music 的登录窗口不支持通行密钥（Passkey）和 YubiKey 这类安全密钥。账户开启了它们的，可以在自己的浏览器里登录，再把令牌交给插件：
+MyGo Music 的登录窗口不支持通行密钥，可以在自己的浏览器里登录，再把令牌交给插件：
 
-1. 在电脑浏览器里打开 [music.apple.com](https://music.apple.com) 并登录。
-2. 打开开发者工具（F12），在「Application / 存储 → Cookies → `https://music.apple.com`」里复制 `media-user-token` 的值。
-3. 粘贴到「设置 → 插件 → Apple Music → **Media User Token**」。也可以直接粘贴整段 Cookie，插件会从中取出 `media-user-token`。
+1. 在已经登录的 [music.apple.com](https://music.apple.com) 打开开发者工具（F12），「Application / 存储 → Cookies → `https://music.apple.com`」里复制 `media-user-token` 的值。
+2. 粘贴到「设置 → 插件 → Apple Music → **Media User Token**」。也可以直接粘贴整段 Cookie。
 
-填好即登录。之后点登录也直接用它，不再打开登录窗口；清空这一项即退出登录。令牌失效后（一般几个月）重新复制一个粘贴进去。
+填好即登录，清空这一项即退出登录。令牌失效后（一般几个月）重新复制一个粘贴进去。
 
 <a id="wrapper-account"></a>
 
 ### 用 wrapper 里的账户登录
 
-已经在 [wrapper-manager](#lossless) 里登录了自己的账户，就不用在插件里再登录一次：在「设置 → 插件 → Apple Music」里填好 **Wrapper 地址**（和 **Wrapper 密钥**），再在 **Wrapper 账户** 里填这个账户在 wrapper 里登录用的 Apple ID。插件通过 `amhelper` 向 wrapper 要这个账户的 media-user-token，wrapper 自己定期刷新令牌，插件随后跟着更新，Apple 拒绝令牌时也会再要一次。通行密钥账户也能这样登录。需要 AMDL-Web 的 wrapper（上游的 wrapper-lite 没有 `/token`）。
+已经在 [wrapper-manager](#lossless) 里登录了自己的账户，就不用在插件里再登录一次，在 **Wrapper 账户** 里填这个账户的 Apple ID。插件通过 `amhelper` 向 wrapper 要这个账户的 media-user-token，wrapper 自己定期刷新令牌。需要 [AMDL-Web](https://github.com/AMDL-Web) 的 [wrapper](https://github.com/AMDL-Web/wrapper)。
 
-- **多个账户**：一个 wrapper-manager 最多登录 10 个账户，各有各的资料库，所以插件不会随便拿第一个，只用 **Wrapper 账户** 指定的那个。家里几个人共用一个 wrapper 时，各自填自己的 Apple ID 即可。也可以填国家或地区代码（如 `jp`），用 wrapper 里该地区第一个可用的账户；早于 wrapper 记录 Apple ID 时登录的账户，仍可用 Apple ID 找到（按 wrapper-manager 的账户 ID 匹配）。填的账户 wrapper 里没有时，错误信息会列出 wrapper 里有哪些账户。
-- 无损播放不受影响：wrapper-manager 仍按歌曲所在的国家或地区挑账户解密，与登录的是哪个账户无关。
-- 同时填了 **Media User Token** 时以它为准。清空 **Wrapper 账户** 即退出登录；在应用里退出登录后，要点登录才会重新登录。
+- **多个账户**：填自己的 Apple ID 即可指定用哪一个，也可以填国家或地区代码（如 `jp`），用 wrapper 里该地区第一个可用的账户。
+- 同时填了 **Media User Token** 时以它为准。清空 **Wrapper 账户** 即退出登录。
 
 ## 功能
 
@@ -41,7 +39,7 @@ MyGo Music 的登录窗口不支持通行密钥（Passkey）和 YubiKey 这类�
 - 新建歌单、在歌单中添加曲目。
 - 完整歌词支持，有逐字时间的按字显示，显示翻译。账户显示你的 Apple Music 名称和头像。
 - 可选的无损支持，未设置或获取失败时自动回退到 AAC
-- 在 MyGo Music 里播放的歌曲会像在 Apple 自己的 App 里一样计入收听历史记录（最近播放、Replay、推荐）；在插件设置的「使用收听历史记录」里填 `off` 关闭。
+- 在 MyGo Music 里播放的歌曲会像在 Apple 自己的 App 里一样计入收听历史记录，可在插件设置的「使用收听历史记录」里填 `off` 关闭。
 
 <a id="lossless"></a>
 

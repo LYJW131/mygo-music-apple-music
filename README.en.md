@@ -19,37 +19,27 @@ Hi-Res Lossless ALAC up to 24-bit/192 kHz (set up [below](#lossless)).
 
 ### Signing in with a media-user-token
 
-MyGo Music's sign-in window can't use passkeys or security keys such as a YubiKey. With an account that signs in with
-one, sign in in your own browser and give the plugin its token:
+MyGo Music's sign-in window can't use passkeys. Sign in in your own browser instead, and give the plugin its token:
 
-1. Open [music.apple.com](https://music.apple.com) in a desktop browser and sign in.
-2. In its developer tools (F12), under Application (Storage) > Cookies > `https://music.apple.com`, copy the value of
-   `media-user-token`.
-3. Paste it in Settings > Plugins > Apple Music > **Media User Token**. The whole cookie header works too: the plugin
-   takes `media-user-token` out of it.
+1. On [music.apple.com](https://music.apple.com), signed in, open the developer tools (F12) and copy the value of
+   `media-user-token` under Application (Storage) > Cookies > `https://music.apple.com`.
+2. Paste it in Settings > Plugins > Apple Music > **Media User Token**. The whole cookie header works too.
 
-That signs you in. Signing in again then uses it without the window; emptying it signs you out. When the token runs out
-(usually after some months), copy and paste a new one.
+That signs you in; emptying it signs you out. When the token runs out (usually after some months), copy and paste a new
+one.
 
 <a id="wrapper-account"></a>
 
 ### Signing in with the wrapper's account
 
-If your account is logged in to a [wrapper-manager](#lossless) already, the plugin can sign in as it: set **Wrapper
-Address** (and **Wrapper Key**) in Settings > Plugins > Apple Music, and put the account's Apple ID, as logged in to the
-wrapper, in **Wrapper Account**. The plugin asks the wrapper for the account's media-user-token through `amhelper`; the
-wrapper refreshes the token on its own, the plugin follows, and asks again if Apple refuses it. This works for accounts
-with a passkey too. It needs AMDL-Web's wrapper (upstream's wrapper-lite has no `/token`).
+If your account is logged in to a [wrapper-manager](#lossless) already, you needn't sign in to the plugin as well: put
+the account's Apple ID in **Wrapper Account**. The plugin asks the wrapper for the account's media-user-token through
+`amhelper`, and the wrapper refreshes the token on its own. It needs [AMDL-Web](https://github.com/AMDL-Web)'s
+[wrapper](https://github.com/AMDL-Web/wrapper).
 
-- **Several accounts**: a wrapper-manager holds up to 10 accounts, each with its own library, so the plugin never takes
-  whichever comes first, only the one **Wrapper Account** names. When a household shares a wrapper, each person names
-  their own Apple ID. A country or region code such as `jp` names the wrapper's first ready account there. An account
-  logged in before the wrapper noted Apple IDs is still found by its Apple ID, through wrapper-manager's account id.
-  When the wrapper doesn't hold the account named, the error lists the ones it holds.
-- Lossless is unaffected: wrapper-manager still picks the account for each song's country or region, whichever account
-  you're signed in as.
-- A **Media User Token** in the settings goes first. Emptying **Wrapper Account** signs you out; after signing out in
-  the app, signing in again signs you back in.
+- **Several accounts**: your Apple ID names the one to use, or a country or region code such as `jp` the wrapper's
+  first ready account there.
+- A **Media User Token** in the settings goes first. Emptying **Wrapper Account** signs you out.
 
 ## Features
 
@@ -60,8 +50,8 @@ with a passkey too. It needs AMDL-Web's wrapper (upstream's wrapper-lite has no 
 - Full lyrics, word by word where Apple has them, with translations. The account shows your Apple Music name and
   picture.
 - Optional lossless, falling back to AAC when it isn't set up or a song can't be had.
-- Songs played in MyGo Music count toward your listening history (Recently Played, Replay, recommendations) as in
-  Apple's own apps; type `off` in the plugin's **Use Listening History** setting to stop it.
+- Songs played in MyGo Music count toward your listening history as in Apple's own apps; type `off` in the plugin's
+  **Use Listening History** setting to stop it.
 
 <a id="lossless"></a>
 

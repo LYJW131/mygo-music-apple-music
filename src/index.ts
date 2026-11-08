@@ -19,19 +19,21 @@ import * as lib from "./library.ts";
 import * as ly from "./lyrics.ts";
 import * as pg from "./pages.ts";
 import * as pb from "./playback.ts";
-import { wake } from "./prefetch.ts";
+import { playing, wake } from "./prefetch.ts";
 import * as se from "./search.ts";
 import * as st from "./stations.ts";
 import { stopWarming, warmLibrary } from "./warmup.ts";
 
 // The app's ask, which also starts fetching the library ahead, once it's
-// quiet, and wakes the wrapper for lossless. Only the app's one object of parameters is passed on: a second
-// argument tells a function it works in the background.
-function asked<P, R>(fn: (params: P) => R | Promise<R>): (params: P) => Promise<R> {
+// quiet, and wakes the wrapper for lossless, unless it's a song to play,
+// which asks the wrapper itself if it has to. Only the app's one object of
+// parameters is passed on: a second argument tells a function it works in the
+// background.
+function asked<P, R>(fn: (params: P) => R | Promise<R>, wakes = true): (params: P) => Promise<R> {
   const call = foreground(fn);
   return (params: P) => {
     warmLibrary();
-    wake();
+    if (wakes) wake();
     return call(params);
   };
 }
@@ -66,7 +68,12 @@ export const lyrics = asked(ly.lyrics);
 export const album = asked(pg.album);
 export const artist = asked(pg.artist);
 export const playlist = asked(pg.playlist);
-export const stream = asked(pb.stream);
+export const stream = asked((p: { id: string; quality?: string }) => {
+  // After the quality asked for is noted, which says how the songs coming up play.
+  const s = pb.stream(p);
+  playing(p.id);
+  return s;
+}, false);
 export const search = asked(se.search);
 export const suggest = asked(se.suggest);
 export const stations = asked(() => st.stations());

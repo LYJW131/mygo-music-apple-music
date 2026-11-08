@@ -27,8 +27,11 @@ import (
 )
 
 const (
-	keysKept   = 300 // about 60 KB each
 	tracksKept = 2000
+	// keysKept: a template for each song kept, most of them one key each,
+	// so that a song worked out is played without the wrapper, which may be
+	// asleep. About 60 KB each, 120 MB at most.
+	keysKept = tracksKept
 	// trackTTL: Apple keeps a song's file where it is, but not forever.
 	trackTTL = 7 * 24 * time.Hour
 )

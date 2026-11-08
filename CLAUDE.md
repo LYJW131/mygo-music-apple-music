@@ -40,7 +40,7 @@ and tests amhelper.
 - `helper/`: `main.go` routes, `wrapper.go` the wrapper client (one request at a time, `queue.go` puts played songs
   before ones prepared ahead), `hls.go` playlists, `mp4.go` decrypts Apple's 15 s fragments into ~1 s ones as they
   arrive, `alac.go` checks a key's first samples look like ALAC (a wrong template gives noise, not an error),
-  `store.go` the disk cache (templates ≤300, tracks a week; a bad template or a 404 media file is fetched again).
+  `store.go` the disk cache (templates and tracks ≤2000 each, tracks a week; a bad template or a 404 media file is fetched again).
   `internal/fairplay` is amdl's Temari port, copied; change it there first.
 - Library ahead: `index.ts` wraps every export in `foreground` (`background.ts`), and `warmup.ts` fetches favorites,
   saved albums, stations, recently added and the 20 playlists changed last, one request at a time, pausing while the

@@ -275,7 +275,8 @@ export function warmLossless(): void {
 // A wrapper on Cloudflare sleeps after five idle minutes, and the song that
 // wakes it waits for its container to start. So while the listener is about,
 // amhelper asks it something now and then (it knows when it last did), and
-// the first song finds it up.
+// the first song finds it up. Not while songs play (prefetch.ts#wake): kept up
+// then, it would never sleep.
 const WAKE_EVERY = 60 * 1000;
 let wokeAt = 0;
 

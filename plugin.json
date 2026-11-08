@@ -1,7 +1,7 @@
 {
   "id": "apple-music",
   "name": "Apple Music",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "minAppVersion": "0.1.21",
   "main": "index.js",
   "playback": "stream",
@@ -27,6 +27,11 @@
       "key": "wrapperKey",
       "label": "Wrapper Key",
       "help": "The wrapper's key (API_KEY), the same one amdl uses: for a wrapper-manager on Cloudflare, or one that faces the internet. Empty for one on this computer or your network without a key."
+    },
+    {
+      "key": "listeningHistory",
+      "label": "Use Listening History",
+      "help": "Songs you play here show in Recently Played and count toward Replay and recommendations, as in Apple's own apps. Empty means on; type off to turn it off."
     }
   ],
   "navigation": [

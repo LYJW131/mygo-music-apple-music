@@ -35,5 +35,7 @@
   "For lossless: the wrapper-manager that holds your Apple Music account, such as http://127.0.0.1:8080. Songs play lossless when MyGo Music's quality is Lossless, and as AAC without a wrapper.": "用于无损音频：登录了你的 Apple Music 账户的 wrapper-manager，例如 http://127.0.0.1:8080。MyGo Music 的音质设为无损时以无损播放；没有 wrapper 时播放 AAC。",
   "Wrapper Key": "Wrapper 密钥",
   "The wrapper's key (API_KEY), the same one amdl uses: for a wrapper-manager on Cloudflare, or one that faces the internet. Empty for one on this computer or your network without a key.": "wrapper 的密钥（API_KEY），和 amdl 里填的是同一个：用于部署在 Cloudflare 上的 wrapper-manager，或暴露到公网的 wrapper-manager。本机或局域网里没有设密钥的留空。",
+  "Use Listening History": "使用收听历史记录",
+  "Songs you play here show in Recently Played and count toward Replay and recommendations, as in Apple's own apps. Empty means on; type off to turn it off.": "在这里播放的歌曲会显示在“最近播放”中，并计入 Replay 和推荐，与 Apple 自己的 App 一样。留空为开启；填 off 关闭。",
   "Allow Apple Music to start programs in its settings, for lossless": "请在插件设置里允许 Apple Music 启动程序（用于无损音频）"
 }

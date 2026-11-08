@@ -21,6 +21,7 @@ test("exports what the app calls, and nothing else", async () => {
     "like",
     "liked",
     "lyrics",
+    "played",
     "playlist",
     "playlists",
     "recent",

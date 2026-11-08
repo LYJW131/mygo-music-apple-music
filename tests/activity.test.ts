@@ -1,0 +1,126 @@
+// Plays reported to Apple's activity service as the web player reports them:
+// offline, against a stand-in that keeps what it was sent.
+import assert from "node:assert/strict";
+import { test } from "node:test";
+
+const jwt = `x.${btoa(JSON.stringify({ exp: Date.now() / 1000 + 86400 }))}.y`;
+const storage = new Map<string, unknown>([
+  ["devToken", jwt],
+  ["mediaUserToken", "token"],
+  ["storefront", "jp"],
+]);
+const settings: Record<string, string> = {};
+(globalThis as any).host = {
+  storage: {
+    get: (k: string) => storage.get(k),
+    set: (k: string, v: unknown) => void storage.set(k, v),
+    remove: (k: string) => void storage.delete(k),
+  },
+  setting: (k: string) => settings[k] ?? "",
+  t: (text: string) => text,
+};
+
+interface Sent {
+  headers: Headers;
+  body: { client_id: string; event_type: string; data: Record<string, any>[] };
+}
+let sent: Sent[] = [];
+let lookups: string[] = [];
+globalThis.fetch = (async (input: string | URL, init?: RequestInit) => {
+  const url = new URL(String(input));
+  // A song the app never listed: its length comes from the catalog, slowly.
+  const song = url.pathname.match(/^\/v1\/catalog\/jp\/songs\/(\d+)$/);
+  if (song) {
+    lookups.push(song[1]);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    return new Response(
+      JSON.stringify({ data: [{ id: song[1], type: "songs", attributes: { durationInMillis: 300000 } }] }),
+    );
+  }
+  assert.equal(String(input), "https://universal-activity-service.itunes.apple.com/play");
+  assert.equal(init?.method, "POST");
+  sent.push({ headers: new Headers(init?.headers), body: JSON.parse(String(init?.body)) });
+  return new Response("{}", { headers: { "content-type": "application/json" } });
+}) as typeof fetch;
+
+const { played, noteDuration } = await import("../src/activity.ts");
+
+const take = () => {
+  const out = sent;
+  sent = [];
+  return out;
+};
+
+test("a song's start is sent as it plays, and its end with the next one's start", async () => {
+  noteDuration("1783644617", 256613);
+  await played({ id: "1783644617" });
+  let [req, ...more] = take();
+  assert.equal(more.length, 0);
+  assert.equal(req.headers.get("authorization"), `Bearer ${jwt}`);
+  assert.equal(req.headers.get("media-user-token"), "token");
+  assert.equal(req.body.client_id, "JSCLIENT");
+  assert.equal(req.body.event_type, "JSPLAY");
+  assert.equal(req.body.data.length, 1);
+  const start = req.body.data[0];
+  assert.equal(start["event-type"], 1);
+  assert.deepEqual(start.ids, { "subscription-adam-id": "1783644617" });
+  assert.equal(start["media-duration-in-milliseconds"], 256613);
+  assert.equal(start["store-front"], "jp");
+
+  // Skipped a moment later: the end says so, and the next song starts.
+  await played({ id: "1880587625" });
+  [req] = take();
+  const [end, next] = req.body.data;
+  assert.equal(end["event-type"], 0);
+  assert.deepEqual(end.ids, { "subscription-adam-id": "1783644617" });
+  assert.equal(end["end-reason-type"], 2);
+  assert.ok(end["end-position-in-milliseconds"] < 256613);
+  assert.equal(next["event-type"], 1);
+  assert.deepEqual(next.ids, { "subscription-adam-id": "1880587625" });
+  assert.equal(next["media-duration-in-milliseconds"], 300000, "never listed: looked up");
+  assert.deepEqual(lookups, ["1880587625"]);
+  assert.notEqual(end["persistent-id"], next["persistent-id"]);
+});
+
+test("a song played out ends naturally, at its length", async () => {
+  noteDuration("1", 1);
+  await played({ id: "1" });
+  take();
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  await played({ id: "i.upload" });
+  const [req] = take();
+  assert.equal(req.body.data.length, 1, "a song outside the catalog isn't reported");
+  assert.equal(req.body.data[0]["end-reason-type"], 7);
+  assert.equal(req.body.data[0]["end-position-in-milliseconds"], 1);
+  await played({ id: "i.upload" });
+  assert.equal(take().length, 0);
+});
+
+test("off in the setting, or signed out, sends nothing", async () => {
+  await played({ id: "1783644617" });
+  take();
+  settings.listeningHistory = " OFF ";
+  await played({ id: "1880587625" });
+  assert.equal(take().length, 0);
+  settings.listeningHistory = "";
+  await played({ id: "1783644617" });
+  assert.equal(take()[0].body.data.length, 1, "nothing left over from before it was off");
+
+  storage.delete("mediaUserToken");
+  await played({ id: "1880587625" });
+  assert.equal(take().length, 0);
+  storage.set("mediaUserToken", "token");
+});
+
+test("plays close together each end the one just before them", async () => {
+  await played({ id: "1783644617" });
+  take();
+  // The first waits on the catalog for its length while the next starts.
+  await Promise.all([played({ id: "1001" }), played({ id: "1783644617" })]);
+  await played({ id: "1880587625" });
+  const ends = take()
+    .flatMap((r) => r.body.data)
+    .filter((e) => e["event-type"] === 0)
+    .map((e) => e.ids["subscription-adam-id"]);
+  assert.deepEqual(ends.sort(), ["1001", "1783644617", "1783644617"].sort());
+});

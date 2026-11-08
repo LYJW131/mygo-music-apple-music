@@ -20,6 +20,8 @@ Hi-Res Lossless ALAC up to 24-bit/192 kHz (set up [below](#lossless)).
 - Full lyrics, word by word where Apple has them, with translations. The account shows your Apple Music name and
   picture.
 - Optional lossless, falling back to AAC when it isn't set up or a song can't be had.
+- Songs played in MyGo Music count toward your listening history (Recently Played, Replay, recommendations) as in
+  Apple's own apps; type `off` in the plugin's **Use Listening History** setting to stop it.
 
 <a id="lossless"></a>
 
@@ -59,6 +61,9 @@ new plugin release, which MyGo offers you as an update.
 
 - The media-user-token is kept **unencrypted** in the plugin's data and only sent to Apple. Signing out forgets it on
   this machine only.
+- With **Use Listening History** on (the default), the plugin tells Apple
+  (`universal-activity-service.itunes.apple.com`) as each song starts which song it is, how long it is and how long
+  the one before played, as the web player at music.apple.com does.
 - The wrapper key is kept in the plugin's settings and only sent to the wrapper address set. `amhelper` listens on this
   machine only, under a random path, and keeps the keys and songs it worked out in the plugin's data.
 

@@ -33,6 +33,9 @@ and tests amhelper.
 - Playing: `playback.ts` (webPlayback → m3u8 → license → ffmpeg `-listen` on 127.0.0.1), `prefetch.ts` (warm
   connections, resolve the first 3 songs of a page, ≤15/min), `ffmpeg.ts`, `artwork.ts` (private playlist covers are
   slow blobstore links, kept locally via ffmpeg).
+- Listening history: `activity.ts` answers `played`, which MyGo calls as a song starts, by posting a start to Apple's
+  play activity service as MusicKit JS does (`universal-activity-service.itunes.apple.com/play`), with the previous
+  song's end timed by the clock. Durations come from `toTrack`. The `listeningHistory` setting set to `off` stops it.
 - Lossless: `lossless.ts` starts amhelper (config on stdin: wrapper, key, cache dir; it answers `{port, secret}`),
   notes each catalog song's `audioTraits` and `extendedAssetUrls.enhancedHls`, and asks amhelper to `prepare` a song
   and serve `song/<id>.m4a`; `null` falls back to AAC. Following amdl, lossless songs use the catalog's master

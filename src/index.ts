@@ -13,6 +13,7 @@
 // one, what's fetched of the library ahead waits too (background.ts).
 
 import * as acc from "./account.ts";
+import * as act from "./activity.ts";
 import { foreground } from "./background.ts";
 import * as br from "./browse.ts";
 import * as lib from "./library.ts";
@@ -74,6 +75,7 @@ export const stream = asked((p: { id: string; quality?: string }) => {
   playing(p.id);
   return s;
 }, false);
+export const played = asked(act.played, false);
 export const search = asked(se.search);
 export const suggest = asked(se.suggest);
 export const stations = asked(() => st.stations());

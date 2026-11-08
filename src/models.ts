@@ -1,5 +1,6 @@
 // What Apple calls things, as the app calls them.
 
+import { noteDuration } from "./activity.ts";
 import { art, playlistArt } from "./artwork.ts";
 import { noteAudio } from "./lossless.ts";
 import type { Resource } from "./types/apple.ts";
@@ -30,6 +31,7 @@ export function toTrack(item: Resource): Track {
   const a = item.attributes ?? {};
   const id = songID(item);
   if (item.type === "songs") noteAudio(id, a);
+  noteDuration(id, a.durationInMillis);
   const artistName = a.artistName ?? "";
   const artists = [{ id: artistIdOf(item) || `name:${artistName}`, name: artistName }];
   return {

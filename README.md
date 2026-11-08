@@ -8,8 +8,20 @@
 
 1. 打开 MyGo Music，在「设置 → 插件 → `+`」里粘贴 `https://github.com/LYJW131/mygo-music-apple-music`。
 2. 来源选择 **Apple Music**。
-3. 点登录，使用有效订阅的 Apple 账户登录。
+3. 点登录，使用有效订阅的 Apple 账户登录。账户用通行密钥或安全密钥登录的，见[下文](#media-user-token)。
 4. 在「设置 → 插件 → Apple Music」里允许启动程序。插件自带的 `amhelper` 在本机解密歌曲，交给 MyGo Music 直接播放，不用另装 ffmpeg；只有 Windows arm64 这类没有 `amhelper` 的平台才要装 [ffmpeg](https://ffmpeg.org)。
+
+<a id="media-user-token"></a>
+
+### 用 media-user-token 登录
+
+MyGo Music 的登录窗口不支持通行密钥（Passkey）和 YubiKey 这类安全密钥。账户开启了它们的，可以在自己的浏览器里登录，再把令牌交给插件：
+
+1. 在电脑浏览器里打开 [music.apple.com](https://music.apple.com) 并登录。
+2. 打开开发者工具（F12），在「Application / 存储 → Cookies → `https://music.apple.com`」里复制 `media-user-token` 的值。
+3. 粘贴到「设置 → 插件 → Apple Music → **Media User Token**」。也可以直接粘贴整段 Cookie，插件会从中取出 `media-user-token`。
+
+填好即登录。之后点登录也直接用它，不再打开登录窗口；清空这一项即退出登录。令牌失效后（一般几个月）重新复制一个粘贴进去。
 
 ## 功能
 
@@ -51,7 +63,7 @@ MyGo Music 发新版本后，会有一个自动化流程检查这个版本是否
 
 ## 隐私
 
-- media-user-token 以**明文形式**保存在个插件数据目录里，只发给 Apple，退出登录只删本机。
+- media-user-token 以**明文形式**保存在个插件数据目录里，只发给 Apple，退出登录只删本机。在设置里填写的令牌也以明文保存在插件设置里。
 - 开启「使用收听历史记录」时（默认开启），每首歌开始播放时，插件把歌曲 ID、时长和播放了多久发给 Apple（`universal-activity-service.itunes.apple.com`），和 Apple Music 网页版上报的一样。
 - Wrapper 密钥保存在插件设置里，只发给设置的 wrapper 地址。`amhelper` 只监听本机，要带随机路径才能访问；它在插件数据目录里缓存解密密钥和歌曲信息。
 

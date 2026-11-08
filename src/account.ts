@@ -1,4 +1,5 @@
-// Signing in, on music.apple.com in a window the app shows.
+// Signing in, on music.apple.com in a window the app shows, or with a
+// media-user-token the listener gives in the settings.
 
 import { me, storefront } from "./api.ts";
 import { art } from "./artwork.ts";
@@ -6,7 +7,7 @@ import { UA, WEB } from "./constants.ts";
 import { forgetLibrary } from "./library.ts";
 import { signedIn } from "./session.ts";
 import type { Account } from "./types/music.ts";
-import { fail, t } from "./util.ts";
+import { codeOf, fail, t } from "./util.ts";
 
 function cookieValue(cookie: string, name: string): string {
   for (const part of cookie.split(";")) {
@@ -16,7 +17,64 @@ function cookieValue(cookie: string, name: string): string {
   return "";
 }
 
+// The token the sign-in gives, kept, and what was kept for whoever signed in
+// before forgotten.
+function keep(token: string): void {
+  host.storage.set("mediaUserToken", token);
+  host.storage.remove("storefront");
+  host.storage.remove("profile");
+  forgetLibrary();
+}
+
+// The window can't sign in to an account that signs in with a passkey or a
+// security key, as it has no WebAuthn: such a listener copies the
+// media-user-token out of their own browser's cookies for music.apple.com,
+// and gives it in the settings, as the token alone or the cookies as copied.
+export function givenToken(): string {
+  let given = host.setting("mediaUserToken").trim();
+  if (/(^|[\s;])media-user-token=/.test(given))
+    given = cookieValue(given.replace(/^cookie:\s*/i, ""), "media-user-token");
+  return given.replace(/^"(.*)"$/, "$1").trim();
+}
+
+// Signs in with the token given in the settings as it changes, and out once
+// it's taken away, unless the listener signed in another way since. Which one
+// was used is kept, as the app may have changed it while the plugin wasn't
+// running to hear of it.
+export function useGivenToken(): void {
+  const given = givenToken();
+  const used = host.storage.get<string>("givenToken") ?? "";
+  if (given === used) return;
+  if (given && /[\s;,]/.test(given)) {
+    throw fail("setup", t("That isn't a media-user-token: paste the value of the media-user-token cookie"));
+  }
+  if (given) {
+    host.storage.set("givenToken", given);
+    keep(given);
+    return;
+  }
+  host.storage.remove("givenToken");
+  if (host.storage.get<string>("mediaUserToken") === used) signOut();
+}
+
 export async function signIn(): Promise<Account | null> {
+  if (givenToken()) {
+    // Again, as after signing out the token there hasn't changed. The window
+    // won't help while it's there: it wouldn't be used.
+    useGivenToken();
+    keep(givenToken());
+    try {
+      return await account();
+    } catch (e) {
+      if (codeOf(e) !== "signIn") throw e;
+      throw fail(
+        "setup",
+        t(
+          "Apple Music didn't accept the Media User Token in the settings. Paste a new one, or empty it to sign in here.",
+        ),
+      );
+    }
+  }
   if (!host.webSignIn) throw fail("unsupported", t("This version of MyGo Music can't show Apple's sign-in page"));
   const { cookie } = await host.webSignIn({
     url: `${WEB}/us/browse`,
@@ -26,10 +84,7 @@ export async function signIn(): Promise<Account | null> {
   });
   const token = cookieValue(cookie ?? "", "media-user-token");
   if (!token) throw new Error(t("Apple Music didn't sign you in"));
-  host.storage.set("mediaUserToken", token);
-  host.storage.remove("storefront");
-  host.storage.remove("profile");
-  forgetLibrary();
+  keep(token);
   return account();
 }
 
@@ -68,6 +123,11 @@ async function profile(): Promise<Profile> {
 }
 
 export async function account(): Promise<Account | null> {
+  try {
+    useGivenToken();
+  } catch {
+    // Said as it was given; until then, whoever is signed in stays.
+  }
   if (!signedIn()) return null;
   const [sf, p] = await Promise.all([storefront(), profile()]);
   return { id: sf, name: p.name ?? `Apple Music (${sf.toUpperCase()})`, imageUrl: p.imageUrl };

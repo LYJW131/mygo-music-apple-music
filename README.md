@@ -1,12 +1,14 @@
 # Apple Music for MyGo Music
 
+[![在 MyGo Music 中安装](docs/install-badge.svg)](https://lyjw131.github.io/mygo-music-apple-music/install.html)
+
 在 [MyGo Music](https://github.com/egoist/mygo-music) 里搜索和播放，音质默认为 256 kbps AAC，可选至高 24-bit/192 kHz ALAC 高解析度无损支持（配置方法[见下文](#lossless)）。
 
 [English](README.en.md)
 
 ## 安装和使用
 
-1. 打开 MyGo Music，在「设置 → 插件 → `+`」里粘贴 `https://github.com/LYJW131/mygo-music-apple-music`。
+1. 点上面的徽章，MyGo Music 会问是否安装；或者在「设置 → 插件 → `+`」里粘贴 `https://github.com/LYJW131/mygo-music-apple-music`。
 2. 来源选择 **Apple Music**。
 3. 点登录，使用有效订阅的 Apple 账户登录。账户用通行密钥或安全密钥登录的，见[下文](#media-user-token)。
 4. 在「设置 → 插件 → Apple Music」里允许启动程序。插件自带的 `amhelper` 在本机解密歌曲，交给 MyGo Music 直接播放，不用另装 ffmpeg；只有 Windows arm64 这类没有 `amhelper` 的平台才要装 [ffmpeg](https://ffmpeg.org)。

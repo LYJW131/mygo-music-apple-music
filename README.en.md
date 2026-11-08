@@ -1,5 +1,7 @@
 # Apple Music for MyGo Music
 
+[![Install in MyGo Music](docs/install-badge.en.svg)](https://lyjw131.github.io/mygo-music-apple-music/install.html)
+
 Search and play Apple Music in [MyGo Music](https://github.com/egoist/mygo-music), as 256 kbps AAC, and optionally as
 Hi-Res Lossless ALAC up to 24-bit/192 kHz (set up [below](#lossless)).
 
@@ -7,7 +9,8 @@ Hi-Res Lossless ALAC up to 24-bit/192 kHz (set up [below](#lossless)).
 
 ## Install and use
 
-1. Open MyGo Music, and paste `https://github.com/LYJW131/mygo-music-apple-music` in Settings > Plugins > `+`.
+1. Click the badge above, and MyGo Music asks to install it; or paste `https://github.com/LYJW131/mygo-music-apple-music` in
+   Settings > Plugins > `+`.
 2. Choose **Apple Music** as the source.
 3. Sign in with an Apple account that has a subscription. For an account that signs in with a passkey or security key,
    see [below](#media-user-token).

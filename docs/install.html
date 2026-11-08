@@ -1,0 +1,249 @@
+<!doctype html>
+<!--
+  The README's install badge links here: GitHub drops links of the app's own
+  scheme from a README, so this page, on GitHub Pages, opens the link instead.
+  The card is the one MyGo Music's plugins page shows (website/src/pages/Plugins.tsx
+  and styles.css in egoist/mygo-music).
+-->
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>apple-music · MyGo Music</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,900&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        color-scheme: light dark;
+        --paper: light-dark(#fbf7f1, #141214);
+        --raised: light-dark(#ffffff, #201d20);
+        --ink: light-dark(#1d1d1f, #f5f5f7);
+        --ink-2: light-dark(rgb(60 60 67 / 0.66), rgb(235 235 245 / 0.62));
+        --ink-3: light-dark(rgb(60 60 67 / 0.36), rgb(235 235 245 / 0.32));
+        --line: light-dark(rgb(0 0 0 / 0.08), rgb(255 255 255 / 0.08));
+        --hover: light-dark(rgb(0 0 0 / 0.04), rgb(255 255 255 / 0.06));
+        --accent: light-dark(oklch(0.6 0.21 24), oklch(0.66 0.2 22));
+        --shadow: light-dark(rgb(80 50 20 / 0.14), rgb(0 0 0 / 0.5));
+        --serif: "Fraunces", "Noto Serif SC", "Songti SC", "STSong", Georgia, serif;
+        --sans:
+          -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI",
+          system-ui, sans-serif;
+        --ease: cubic-bezier(0.22, 1, 0.36, 1);
+      }
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 16px;
+        background: var(--paper);
+        color: var(--ink);
+        font-family: var(--sans);
+        font-size: 16px;
+        line-height: 1.65;
+        -webkit-font-smoothing: antialiased;
+      }
+      a {
+        color: inherit;
+      }
+      :focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+        border-radius: 6px;
+      }
+      h2,
+      p {
+        margin: 0;
+      }
+      .platform {
+        width: min(100%, 380px);
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 28px;
+        border-radius: 22px;
+        background: var(--raised);
+        box-shadow:
+          0 0 0 1px var(--line),
+          0 10px 30px -22px var(--shadow);
+      }
+      .plugin-card-head {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .plugin-avatar {
+        flex-shrink: 0;
+        border-radius: 10px;
+        background: var(--hover);
+      }
+      .plugin-title {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+      }
+      .platform h2 {
+        font-family: var(--serif);
+        font-size: 21px;
+        font-weight: 900;
+        letter-spacing: -0.01em;
+        overflow-wrap: anywhere;
+      }
+      .plugin-repo {
+        font-size: 13px;
+        color: var(--ink-3);
+        text-decoration: none;
+        overflow-wrap: anywhere;
+      }
+      .plugin-repo:hover {
+        color: var(--ink-2);
+        text-decoration: underline;
+        text-underline-offset: 3px;
+      }
+      .plugin-stars {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-left: auto;
+        align-self: flex-start;
+        font-size: 13px;
+        color: var(--ink-3);
+        font-variant-numeric: tabular-nums;
+      }
+      .plugin-stars[hidden] {
+        display: none;
+      }
+      .platform-note {
+        flex: 1;
+        font-size: 14px;
+        line-height: 1.65;
+        color: var(--ink-2);
+        text-wrap: pretty;
+      }
+      .plugin-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        margin-top: 8px;
+      }
+      .build {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        height: 44px;
+        padding: 0 16px;
+        border-radius: 12px;
+        font-size: 14.5px;
+        text-decoration: none;
+        background: var(--hover);
+        transition:
+          background 0.2s,
+          transform 0.3s var(--ease);
+      }
+      .build:hover {
+        background: light-dark(rgb(0 0 0 / 0.07), rgb(255 255 255 / 0.1));
+      }
+      .build:active {
+        transform: scale(0.98);
+      }
+      .build svg {
+        color: var(--ink-3);
+      }
+      .build.primary {
+        background: var(--accent);
+        color: #fff;
+      }
+      .build.primary svg {
+        color: rgb(255 255 255 / 0.78);
+      }
+      .build.primary:hover {
+        background: light-dark(oklch(0.56 0.21 24), oklch(0.7 0.2 22));
+      }
+      .build-label {
+        font-weight: 600;
+      }
+      @media (max-width: 600px) {
+        .platform {
+          padding: 24px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <article class="platform plugin-card">
+      <div class="plugin-card-head">
+        <img class="plugin-avatar" src="https://github.com/LYJW131.png?size=80" alt="" width="40" height="40" />
+        <div class="plugin-title">
+          <h2>apple-music</h2>
+          <a class="plugin-repo" href="https://github.com/LYJW131/mygo-music-apple-music"
+            >LYJW131/mygo-music-apple-music</a
+          >
+        </div>
+        <span class="plugin-stars" hidden>
+          <svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="m12 2.8 2.8 5.8 6.3.9-4.6 4.4 1.1 6.3L12 17.2l-5.6 3 1.1-6.3-4.6-4.4 6.3-.9z"
+              fill="currentColor"
+            />
+          </svg>
+          <span></span>
+        </span>
+      </div>
+      <p class="platform-note">Apple Music for MyGo Music on macOS, Windows and Linux, with Hi-Res Lossless</p>
+      <div class="plugin-actions">
+        <a class="build primary" href="mygo-music://install-plugin?repo=LYJW131/mygo-music-apple-music">
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M12 3v12M7 10l5 5 5-5M5 21h14" />
+          </svg>
+          <span class="build-label" data-en="Install">安装</span>
+        </a>
+        <a class="build" href="https://github.com/LYJW131/mygo-music-apple-music">
+          <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              fill="currentColor"
+              d="M12 .5a11.5 11.5 0 0 0-3.6 22.4c.6.1.8-.3.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.2 1.2a11 11 0 0 1 5.8 0c2.2-1.5 3.2-1.2 3.2-1.2.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A11.5 11.5 0 0 0 12 .5z"
+            />
+          </svg>
+          <span class="build-label">GitHub</span>
+        </a>
+      </div>
+    </article>
+    <script>
+      const repo = "LYJW131/mygo-music-apple-music";
+      if (!/^zh/i.test(navigator.language)) {
+        document.documentElement.lang = "en";
+        for (const el of document.querySelectorAll("[data-en]")) el.textContent = el.dataset.en;
+      }
+      // The stars and description as GitHub has them now, as the plugins page shows them.
+      fetch(`https://api.github.com/repos/${repo}`)
+        .then((res) => (res.ok ? res.json() : Promise.reject()))
+        .then((r) => {
+          const n = r.stargazers_count;
+          const stars = document.querySelector(".plugin-stars");
+          stars.lastElementChild.textContent = n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : `${n}`;
+          stars.hidden = false;
+          if (r.description) document.querySelector(".platform-note").textContent = r.description;
+        })
+        .catch(() => {});
+      location.href = `mygo-music://install-plugin?repo=${repo}`;
+    </script>
+  </body>
+</html>

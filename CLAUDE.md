@@ -30,7 +30,8 @@ and tests amhelper.
 - `src/index.ts` exports exactly the functions MyGo calls; `tests/plugin.test.ts` pins that list. Add an export there
   and in the test together.
 - `src/api.ts` requests to amp-api (dev token + `media-user-token`, 401 retries once with a fresh dev token),
-  `session.ts` tokens, `account.ts` sign-in, `models.ts` Apple resources → MyGo shapes.
+  `session.ts` tokens, `account.ts` sign-in (the window, or the
+  `mediaUserToken` setting for accounts with a passkey or security key, which the window can't use), `models.ts` Apple resources → MyGo shapes.
 - Pages: `browse.ts` (home, charts, recently added), `search.ts`, `library.ts`, `pages.ts` (album/artist/playlist),
   `stations.ts`, `lyrics.ts` (TTML).
 - Playing: `playback.ts` (webPlayback → m3u8 → license; the song handed to amhelper as `POST aac/<id>` with its key
@@ -91,7 +92,8 @@ The bundle runs in MyGo's moejs runtime, not Node:
 - Erasable TypeScript only (no `enum`, `namespace`, parameter properties): `erasableSyntaxOnly` is on, as Node strips
   types. Relative imports end in `.ts`.
 - Errors the app should act on carry a code: `fail("signIn" | "setup" | "unavailable" | "unsupported", message)`.
-- `host.storage` keys: `mediaUserToken`, `storefront`, `profile` (name and picture, a day), `devToken`, `resolved` (song → media + key + seconds, ≤3000; ones kept without seconds have their playlist read again), `covers`,
+- `host.storage` keys: `mediaUserToken`, `givenToken` (the `mediaUserToken` setting last signed in with, for accounts
+  the sign-in window can't sign in to), `storefront`, `profile` (name and picture, a day), `devToken`, `resolved` (song → media + key + seconds, ≤3000; ones kept without seconds have their playlist read again), `covers`,
   `quality` (the app's last asked), `lossless` (song → its ALAC or none, a week).
 
 ## Conventions

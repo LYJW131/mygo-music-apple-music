@@ -9,10 +9,27 @@ Hi-Res Lossless ALAC up to 24-bit/192 kHz (set up [below](#lossless)).
 
 1. Open MyGo Music, and paste `https://github.com/LYJW131/mygo-music-apple-music` in Settings > Plugins > `+`.
 2. Choose **Apple Music** as the source.
-3. Sign in with an Apple account that has a subscription.
+3. Sign in with an Apple account that has a subscription. For an account that signs in with a passkey or security key,
+   see [below](#media-user-token).
 4. Allow Apple Music to start programs in Settings > Plugins > Apple Music. The plugin's own `amhelper` decrypts songs
    on this machine and MyGo Music plays them itself, with nothing else to install; only on a platform it doesn't come
    for, such as Windows on arm64, does it play through [ffmpeg](https://ffmpeg.org), which you install.
+
+<a id="media-user-token"></a>
+
+### Signing in with a media-user-token
+
+MyGo Music's sign-in window can't use passkeys or security keys such as a YubiKey. With an account that signs in with
+one, sign in in your own browser and give the plugin its token:
+
+1. Open [music.apple.com](https://music.apple.com) in a desktop browser and sign in.
+2. In its developer tools (F12), under Application (Storage) > Cookies > `https://music.apple.com`, copy the value of
+   `media-user-token`.
+3. Paste it in Settings > Plugins > Apple Music > **Media User Token**. The whole cookie header works too: the plugin
+   takes `media-user-token` out of it.
+
+That signs you in. Signing in again then uses it without the window; emptying it signs you out. When the token runs out
+(usually after some months), copy and paste a new one.
 
 ## Features
 
@@ -63,7 +80,7 @@ new plugin release, which MyGo offers you as an update.
 ## Privacy
 
 - The media-user-token is kept **unencrypted** in the plugin's data and only sent to Apple. Signing out forgets it on
-  this machine only.
+  this machine only. One given in the settings is kept unencrypted in the plugin's settings too.
 - With **Use Listening History** on (the default), the plugin tells Apple
   (`universal-activity-service.itunes.apple.com`) as each song starts which song it is, how long it is and how long
   the one before played, as the web player at music.apple.com does.

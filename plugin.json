@@ -18,6 +18,12 @@
   },
   "settings": [
     {
+      "key": "mediaUserToken",
+      "label": "Media User Token",
+      "help": "For an Apple Account that signs in with a passkey or security key, which the sign-in window can't use: sign in at music.apple.com in your browser, and paste the value of its media-user-token cookie here. Empty it to sign out, or to sign in with the window again.",
+      "link": "https://github.com/LYJW131/mygo-music-apple-music#media-user-token"
+    },
+    {
       "key": "wrapper",
       "label": "Wrapper Address",
       "help": "For lossless: the wrapper-manager that holds your Apple Music account, such as http://127.0.0.1:8080. Songs play lossless when MyGo Music's quality is Lossless, and as AAC without a wrapper.",

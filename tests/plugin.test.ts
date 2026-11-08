@@ -29,6 +29,7 @@ test("exports what the app calls, and nothing else", async () => {
     "savePlaylist",
     "savedAlbums",
     "search",
+    "setSetting",
     "signIn",
     "signOut",
     "stationNext",
@@ -56,6 +57,56 @@ test("signed out, the library asks to sign in, before asking Apple", async () =>
     () => api.stream({ id: "i.abc" }),
     (e: { code?: string }) => e.code === "unavailable",
   );
+});
+
+test("a media-user-token given in the settings signs in, and out once it's emptied", async () => {
+  const settings: Record<string, string> = {};
+  const { api, storage } = await load({ settings, language: "en" });
+  // As copied from a browser: the cookie header, with others around it.
+  settings.mediaUserToken = "Cookie: geo=US; media-user-token=AbC+/12=; itspod=55";
+  await api.setSetting({ key: "mediaUserToken", value: settings.mediaUserToken });
+  assert.equal(storage.get("mediaUserToken"), "AbC+/12=");
+
+  // Signing out leaves it signed out, though the setting is still there.
+  await api.signOut();
+  assert.equal(await api.account(), null);
+
+  // The header as some tools copy it, without a space.
+  settings.mediaUserToken = "cookie:media-user-token=Spaceless";
+  await api.setSetting({ key: "mediaUserToken", value: settings.mediaUserToken });
+  assert.equal(storage.get("mediaUserToken"), "Spaceless");
+
+  // Another token, or the token alone, signs in with it.
+  settings.mediaUserToken = ' "XyZ" ';
+  await api.setSetting({ key: "mediaUserToken", value: settings.mediaUserToken });
+  assert.equal(storage.get("mediaUserToken"), "XyZ");
+
+  // Not a token: said, and whoever is signed in stays.
+  settings.mediaUserToken = "geo=US; itspod=55";
+  await assert.rejects(
+    () => api.setSetting({ key: "mediaUserToken", value: settings.mediaUserToken }),
+    (e: { code?: string }) => e.code === "setup",
+  );
+  assert.equal(storage.get("mediaUserToken"), "XyZ");
+
+  // Emptied, it signs out, without asking Apple.
+  settings.mediaUserToken = "";
+  await api.setSetting({ key: "mediaUserToken", value: "" });
+  assert.equal(storage.get("mediaUserToken"), undefined);
+  assert.equal(await api.account(), null);
+});
+
+test("a token signed in with another way stays when the setting is emptied", async () => {
+  const settings: Record<string, string> = { mediaUserToken: "Old" };
+  const storage = new Map<string, unknown>([
+    ["givenToken", "Old"],
+    ["mediaUserToken", "FromTheWindow"],
+  ]);
+  const { api } = await load({ settings, storage });
+  settings.mediaUserToken = "";
+  await api.setSetting({ key: "mediaUserToken", value: "" });
+  assert.equal(storage.get("mediaUserToken"), "FromTheWindow");
+  assert.equal(storage.has("givenToken"), false);
 });
 
 test("speaks the listener's language", async () => {

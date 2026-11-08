@@ -49,6 +49,13 @@ export const signOut = asked(() => {
   stopWarming();
   acc.signOut();
 });
+// A setting changed: the app asks who's signed in after. Only the token
+// signs anyone in or out; the rest is read as it's used.
+export const setSetting = asked((p: { key: string; value: string }) => {
+  if (p.key !== "mediaUserToken") return;
+  stopWarming();
+  acc.useGivenToken();
+});
 export const home = asked(br.home);
 export const browse = asked(br.browse);
 export const recent = asked(lib.recent);

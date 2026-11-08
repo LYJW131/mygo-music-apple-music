@@ -85,6 +85,13 @@ export async function playlist({ id }: { id: string }): Promise<Playlist> {
     catalog(`/playlists/${id}`, { include: "tracks" }),
     inLibrary("playlists", id),
   ]);
+  // The listener's own playlist by its catalog ID, as Apple's Recently Played
+  // lists it, is opened as their library's: the app then offers to edit it, and
+  // not to unsave it, which would delete it.
+  if (own && id.startsWith("pl.u-")) {
+    const theirs = await me(`/library/playlists/${own.id}`).catch(() => null);
+    if (theirs?.data?.[0]?.attributes?.canEdit) return playlist({ id: own.id });
+  }
   const item = first(body);
   let tracks = item.relationships?.tracks?.data ?? [];
   if (item.relationships?.tracks?.next) {

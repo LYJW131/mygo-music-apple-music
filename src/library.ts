@@ -1,7 +1,7 @@
 // The listener's library: what they played lately, their songs, albums and
 // playlists, and what they favorite.
 
-import { allPages, catalog, me } from "./api.ts";
+import { allPages, catalog, first, me } from "./api.ts";
 import { forget, forgetAll, kept } from "./background.ts";
 import { songsOf, toAlbum, toPlaylist } from "./models.ts";
 import { prefetch } from "./prefetch.ts";
@@ -167,7 +167,11 @@ export async function savePlaylist({ id, on }: { id: string; on: boolean }): Pro
     return;
   }
   const own = id.startsWith("p.") ? { id } : await inLibrary("playlists", id);
-  if (own) await me(`/library/playlists/${own.id}`, null, { method: "DELETE" });
+  if (!own) return;
+  // Unsaving takes a playlist out of the library, which for one the listener
+  // made deletes it: only one saved from someone else goes.
+  if (first(await me(`/library/playlists/${own.id}`)).attributes?.canEdit) throw fail("unsupported");
+  await me(`/library/playlists/${own.id}`, null, { method: "DELETE" });
 }
 
 /** The sidebar's playlists: Favorite Songs is the app's own Liked page. */

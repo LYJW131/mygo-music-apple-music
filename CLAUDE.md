@@ -31,8 +31,11 @@ and tests amhelper.
 - Pages: `browse.ts` (home, charts, recently added), `search.ts`, `library.ts`, `pages.ts` (album/artist/playlist),
   `stations.ts`, `lyrics.ts` (TTML).
 - Playing: `playback.ts` (webPlayback → m3u8 → license → ffmpeg `-listen` on 127.0.0.1), `prefetch.ts` (warm
-  connections, resolve the first 3 songs of a page, ≤15/min), `ffmpeg.ts`, `artwork.ts` (private playlist covers are
-  slow blobstore links, kept locally via ffmpeg).
+  connections, resolve the first 3 songs of a page, ≤15/min; every list the app may play from is noted, home's only
+  where no page opened has the song, and a song played lossless works out the 12 after it; a station's 10 are worked out
+  as they come; `lyrics`, asked as every song starts, even one played from the app's cache, counts as playing, which
+  leaves the wrapper asleep), `ffmpeg.ts`, `artwork.ts` (private playlist covers are slow blobstore links, kept locally
+  via ffmpeg).
 - Listening history: `activity.ts` answers `played`, which MyGo calls as a song starts, by posting a start to Apple's
   play activity service as MusicKit JS does (`universal-activity-service.itunes.apple.com/play`), with the previous
   song's end timed by the clock. Durations come from `toTrack`. The `listeningHistory` setting set to `off` stops it.

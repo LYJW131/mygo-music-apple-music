@@ -20,7 +20,7 @@ import * as lib from "./library.ts";
 import * as ly from "./lyrics.ts";
 import * as pg from "./pages.ts";
 import * as pb from "./playback.ts";
-import { playing, wake } from "./prefetch.ts";
+import { heard, playing, wake } from "./prefetch.ts";
 import * as se from "./search.ts";
 import * as st from "./stations.ts";
 import { stopWarming, warmLibrary } from "./warmup.ts";
@@ -65,7 +65,12 @@ export const playlists = asked(async () => {
   warmLibrary(1000);
   return lists;
 });
-export const lyrics = asked(ly.lyrics);
+// Asked for as a song starts, even one the app plays from its cache, without
+// asking for its audio: a song plays, and the wrapper is left to sleep.
+export const lyrics = asked((p: { id: string }) => {
+  heard();
+  return ly.lyrics(p);
+}, false);
 export const album = asked(pg.album);
 export const artist = asked(pg.artist);
 export const playlist = asked(pg.playlist);

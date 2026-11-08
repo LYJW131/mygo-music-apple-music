@@ -4,7 +4,7 @@ import { allPages, catalog, me, storefront } from "./api.ts";
 import { kept } from "./background.ts";
 import { LIST_KEPT, recentTracks } from "./library.ts";
 import { songsOf, toAlbum, toPlaylist, toStation } from "./models.ts";
-import { warm } from "./prefetch.ts";
+import { listed, shown, warm } from "./prefetch.ts";
 import { signedIn } from "./session.ts";
 import type { Body, ChartsBody } from "./types/apple.ts";
 import type { Browse, Section, Track } from "./types/music.ts";
@@ -27,6 +27,10 @@ export async function home(): Promise<Browse> {
     sections.push({ title: chart.songs.name || t("Top Songs"), tracks: songsOf(chart.songs.data), morePage: "charts" });
   }
   if (recent.length) sections.push({ title: t("Recently Played"), tracks: recent.slice(0, 30) });
+  // The app plays a section's songs from the one picked on. It loads home
+  // again by itself, every hour, songs playing or not: what's on it is noted,
+  // and worked out only as it plays, so that it doesn't wake the wrapper.
+  for (const s of sections) shown(s.tracks ?? []);
   for (const rec of recommendations?.data ?? []) {
     const items = rec.relationships?.contents?.data ?? [];
     const albums = items.filter((i) => i.type === "albums").map(toAlbum);
@@ -60,7 +64,11 @@ export async function browse({ page }: { page: string }): Promise<Browse> {
   if (page === "charts") {
     const chart = await charts(100);
     const sections: Section[] = [];
-    if (chart.songs) sections.push({ title: chart.songs.name || t("Top Songs"), tracks: songsOf(chart.songs.data) });
+    if (chart.songs) {
+      const songs = songsOf(chart.songs.data);
+      listed(songs);
+      sections.push({ title: chart.songs.name || t("Top Songs"), tracks: songs });
+    }
     if (chart.albums)
       sections.push({ title: chart.albums.name || t("Top Albums"), albums: chart.albums.data.map(toAlbum) });
     if (chart.playlists) {

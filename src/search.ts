@@ -3,7 +3,7 @@
 import { catalog, first } from "./api.ts";
 import { songsOf, toAlbum, toArtist, toPlaylist } from "./models.ts";
 import { album } from "./pages.ts";
-import { prefetch, warm } from "./prefetch.ts";
+import { listed, prefetch, warm } from "./prefetch.ts";
 import type { Resource, SearchBody, SuggestionsBody } from "./types/apple.ts";
 import type { SearchKind, SearchResult, Track } from "./types/music.ts";
 
@@ -41,7 +41,12 @@ export async function search({
   const body = await catalog<SearchBody>("/search", { term, types: type, limit: 25, offset: offset || undefined });
   const r = body?.results?.[type];
   const found = convert[kind](r?.data ?? []);
-  if (kind === "tracks" && !offset) prefetch(found as Track[]);
+  // The app adds the next pages to the songs it lists, which play on into them.
+  if (kind === "tracks") {
+    const run = { key: `search:${term}`, start: !offset };
+    if (offset) listed(found as Track[], run);
+    else prefetch(found as Track[], run);
+  }
   return { [kind]: found, more: !!r?.next };
 }
 

@@ -5,6 +5,7 @@ import { catalog, me } from "./api.ts";
 import { kept } from "./background.ts";
 import { LIST_KEPT } from "./library.ts";
 import { songsOf, toStation } from "./models.ts";
+import { stationSongs } from "./prefetch.ts";
 import { signedIn } from "./session.ts";
 import type { Station, Track } from "./types/music.ts";
 import { t } from "./util.ts";
@@ -27,5 +28,7 @@ async function fetchStations(pause: () => Promise<void>): Promise<Station[]> {
 }
 
 export async function stationNext({ id }: { id: string }): Promise<Track[]> {
-  return songsOf((await me(`/stations/next-tracks/${id}`, { limit: 10 }, { method: "POST" }))?.data);
+  const songs = songsOf((await me(`/stations/next-tracks/${id}`, { limit: 10 }, { method: "POST" }))?.data);
+  stationSongs(id, songs);
+  return songs;
 }

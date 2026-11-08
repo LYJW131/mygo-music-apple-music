@@ -45,6 +45,77 @@ const NEXT = 12;
 const lists = new Map<string, string[]>();
 const LISTED_MOST = 5000;
 
+// Lists the app goes on with as it asks for more: a station's next songs, a
+// search's next page. The app adds them to the end of what it has, but those
+// it has already, and so are they here.
+const runs = new Map<string, string[]>();
+const RUNS_MOST = 50;
+const RUN_LONGEST = 500;
+
+/** A list the songs go on, from the start or after the songs before. */
+export interface Run {
+  key: string;
+  start: boolean;
+}
+
+const playable = (tracks: Track[]) => tracks.filter((x) => !x.unavailable && isCatalogID(x.id)).map((x) => x.id);
+
+// Lists the app loaded by itself, as home: a song on a page the listener
+// opened stays on that one, which is more likely what they play it from.
+// Home's Recently Played has the album playing on it, by then.
+const aside = new WeakSet<string[]>();
+
+function note(all: string[], weakly = false): void {
+  if (weakly) aside.add(all);
+  for (const id of all) {
+    const was = lists.get(id);
+    if (weakly && was && !aside.has(was)) continue;
+    lists.delete(id);
+    lists.set(id, all);
+  }
+  while (lists.size > LISTED_MOST) lists.delete(lists.keys().next().value!);
+}
+
+/**
+ * Notes songs the app loaded by itself, home's, as a list it may play from,
+ * so that playing one works out the ones after it, but works none out now:
+ * the app loads home again every hour, songs playing or not. A song noted
+ * from a page the listener opened stays on that page's list.
+ */
+export function shown(tracks: Track[]): void {
+  note(playable(tracks), true);
+}
+
+/**
+ * Notes the songs as a list the app may play from, so that playing one works
+ * out the ones after it, but works none out now. Returns the songs that
+ * play, the run's new ones for a run.
+ */
+export function listed(tracks: Track[], run?: Run): string[] {
+  const ids = playable(tracks);
+  if (!run) {
+    note(ids);
+    return ids;
+  }
+  const before = run.start ? [] : (runs.get(run.key) ?? []);
+  const fresh = [...new Set(ids)].filter((id) => !before.includes(id));
+  const all = [...before, ...fresh].slice(-RUN_LONGEST);
+  runs.delete(run.key);
+  runs.set(run.key, all);
+  while (runs.size > RUNS_MOST) runs.delete(runs.keys().next().value!);
+  note(all);
+  return fresh;
+}
+
+// The app asks for the lyrics of every song it plays, as it starts, but for
+// the audio only of a song it doesn't keep: a song played before plays from
+// its cache, and says it plays by its lyrics only.
+
+/** The app asked for a song's lyrics, which it does as the song starts. */
+export function heard(): void {
+  playedAt = Date.now();
+}
+
 /** The app asked for a song to play. */
 export function playing(id: string): void {
   playedAt = Date.now();
@@ -100,14 +171,9 @@ const ready = (id: string) => (lossless() ? preparedOrPreparing(id) : resolvedOr
 const FOUND = 20;
 const FINDING_AT_ONCE = 4;
 
-export function prefetch(tracks: Track[]): void {
+export function prefetch(tracks: Track[], run?: Run): void {
+  const all = listed(tracks, run);
   if (!lossless() && !signedIn()) return;
-  const all = tracks.filter((x) => !x.unavailable && isCatalogID(x.id)).map((x) => x.id);
-  for (const id of all) {
-    lists.delete(id);
-    lists.set(id, all);
-  }
-  while (lists.size > LISTED_MOST) lists.delete(lists.keys().next().value!);
   if (lossless()) {
     const page = all.slice(0, FOUND);
     void learnAudio(page)
@@ -119,6 +185,34 @@ export function prefetch(tracks: Track[]): void {
     return;
   }
   prepareFirst(all);
+}
+
+// A station's songs come ten at a time, and the app asks for the next ten
+// as the last but one plays, then plays them. So they're all worked out as
+// they come, in one go: the wrapper is asked nothing more until the next ten,
+// half an hour on, and sleeps between. The app won't ask for the first of
+// them ahead, as it does a page's next song, so worked out as it plays, it
+// would wait for a wrapper woken from sleep.
+
+// A station asked again after a while is most likely played anew, and the
+// app's queue is then only what it gives.
+const STATION_ANEW = 2 * 60 * 60 * 1000;
+const stationAt = new Map<string, number>();
+
+/** The app was given the station's next songs, which it plays after those it has. */
+export function stationSongs(station: string, tracks: Track[]): void {
+  const start = Date.now() - (stationAt.get(station) ?? -Infinity) > STATION_ANEW;
+  stationAt.delete(station);
+  stationAt.set(station, Date.now());
+  if (stationAt.size > RUNS_MOST) stationAt.delete(stationAt.keys().next().value!);
+  const fresh = listed(tracks, { key: `station:${station}`, start });
+  if (lossless()) {
+    void learnAudio(fresh)
+      .catch(() => {})
+      .then(() => enqueue(fresh));
+    return;
+  }
+  if (signedIn()) prepareFirst(fresh);
 }
 
 async function findAll(ids: string[]): Promise<void> {

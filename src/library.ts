@@ -4,7 +4,7 @@
 import { allPages, catalog, first, me } from "./api.ts";
 import { forget, forgetAll, kept } from "./background.ts";
 import { songsOf, toAlbum, toPlaylist } from "./models.ts";
-import { prefetch } from "./prefetch.ts";
+import { prefetch, shown } from "./prefetch.ts";
 import { signedIn } from "./session.ts";
 import type { Resource } from "./types/apple.ts";
 import type { Album, Playlist, Track } from "./types/music.ts";
@@ -71,7 +71,13 @@ export async function recentTracks(): Promise<Track[]> {
   return out;
 }
 
-export const recent = (): Promise<Track[]> => recentTracks();
+// The app lists these in place of home, when it has nothing, and loads them
+// as it loads home.
+export const recent = (): Promise<Track[]> =>
+  recentTracks().then((tracks) => {
+    shown(tracks);
+    return tracks;
+  });
 
 // Liked songs are Favorite Songs, newest first, as Apple's apps list them.
 // Liking a song favorites it, as the star in Apple's apps does, which puts it

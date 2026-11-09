@@ -39,16 +39,16 @@ const { values: args } = parseArgs({
     target: { type: "string" },
     notes: { type: "string" },
     out: { type: "string" },
-    model: { type: "string", default: "claude-opus-5-5" },
+    model: { type: "string", default: "claude-fable-5-2" },
     effort: { type: "string", default: "medium" },
-    // fast: Opus 5.5's fast mode, at twice the price.
+    // fast: the model's fast mode, at twice the price.
     speed: { type: "string", default: "standard" },
     minutes: { type: "string", default: "30" },
-    dollars: { type: "string", default: "5" },
+    dollars: { type: "string", default: "10" },
     fakeapple: { type: "string", default: "fakeapple" },
     fix: { type: "boolean", default: false },
     "fix-minutes": { type: "string", default: "20" },
-    "fix-dollars": { type: "string", default: "5" },
+    "fix-dollars": { type: "string", default: "10" },
   },
 });
 if (!args.upstream || !args.base || !args.target || !args.out) {
@@ -312,10 +312,17 @@ log({ system: systemText, first: messages[0]!.content });
 
 const totals = { input: 0, cacheWrite: 0, cacheRead: 0, output: 0 };
 let turns = 0;
-// Claude Opus 5.5's prices per million tokens; fast mode doubles them.
-const spent = () =>
-  ((fast ? 2 : 1) * (totals.input * 4 + totals.cacheWrite * 5 + totals.cacheRead * 0.2 + totals.output * 20)) /
-  1_000_000;
+// Dollars per million tokens: input, 5-minute cache writes, cache reads,
+// output. Each turn is priced by the model that answered it, as a fallback
+// can be another; one not listed is priced as the dearest, so the breakers
+// stay on the safe side. Fast mode doubles all of them.
+const PRICES: Record<string, [number, number, number, number]> = {
+  "claude-fable-5-2": [8, 10, 0.2, 40],
+  "claude-fable-5-1": [10, 12.5, 0.25, 50],
+  "claude-opus-5-5": [4, 5, 0.2, 20],
+};
+let dollarsSpent = 0;
+const spent = () => dollarsSpent;
 
 type Phase = {
   // What it ends with, in the model's words and in lyjw's.
@@ -373,6 +380,14 @@ async function converse(phase: Phase): Promise<void> {
     totals.cacheWrite += message.usage.cache_creation_input_tokens ?? 0;
     totals.cacheRead += message.usage.cache_read_input_tokens ?? 0;
     totals.output += message.usage.output_tokens;
+    const [input, write, read, output] = PRICES[message.model.replace(/^.*\//, "")] ?? PRICES["claude-fable-5-1"]!;
+    dollarsSpent +=
+      ((message.usage.speed === "fast" ? 2 : 1) *
+        (message.usage.input_tokens * input +
+          (message.usage.cache_creation_input_tokens ?? 0) * write +
+          (message.usage.cache_read_input_tokens ?? 0) * read +
+          message.usage.output_tokens * output)) /
+      1_000_000;
     for (const block of message.content) {
       if (block.type === "thinking" && block.thinking) console.error(`[think] ${block.thinking.slice(0, 300)}`);
       if (block.type === "text") console.error(`[text] ${block.text.slice(0, 300)}`);

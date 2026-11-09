@@ -193,7 +193,7 @@ jobs:
         run: >-
           node scripts/upstream-watch.ts --plugin "$PLUGIN" --upstream "$MYGO" --base "$BASE" --target "$TARGET"
           --notes "$RUNNER_TEMP/notes.md" --fakeapple "$RUNNER_TEMP/bin/fakeapple" --out "$RUNNER_TEMP/watch"
-          --speed fast --minutes 30 --dollars 10 $([ "$FIX" = true ] && echo --fix --fix-minutes 20 --fix-dollars 10)
+          --speed fast --minutes 30 --dollars 20 $([ "$FIX" = true ] && echo --fix --fix-minutes 20 --fix-dollars 20)
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:

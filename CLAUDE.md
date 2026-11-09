@@ -68,13 +68,13 @@ and tests amhelper.
   background call; the app only ever passes one.
 - Liked is Favorite Songs, the library playlist with `canDelete: false` and no catalog version, hidden from
   `playlists`; liking is a rating of 1.
-- Upstream watch: `.github/workflows/upstream.yml` runs `scripts/upstream-watch.ts` when MyGo releases. Claude Opus
+- Upstream watch: `.github/workflows/upstream.yml` runs `scripts/upstream-watch.ts` when MyGo releases. Claude Fable
   (Anthropic API through GitHub OIDC, no key) reads the diff against the plugin, runs what it can on the runner, and
   `scripts/upstream-watch/report.ts` turns its report into a comment by lyjw131[bot] on the open Automation issue.
-  Commands run under bubblewrap only to keep the job's OIDC request token from them. It runs Opus 5.5 in fast mode
-  (twice the price). Breakers: 30 minutes and $10 a run (then it is told to hand in; past 1.5 times either it stops),
+  Commands run under bubblewrap only to keep the job's OIDC request token from them. It runs Fable 5.2 in fast mode
+  (twice the price). Breakers: 30 minutes and $20 a run (then it is told to hand in; past 1.5 times either it stops),
   and 3 automatic runs a day. When the report says the plugin needs a change, the same conversation makes it (20
-  minutes and $10 more, `npm run check` must pass, no `.github/`), and `scripts/upstream-watch/propose.ts` opens a
+  minutes and $20 more, `npm run check` must pass, no `.github/`), and `scripts/upstream-watch/propose.ts` opens a
   draft pull request of one commit, made through `createCommitOnBranch` so GitHub signs it as lyjw131[bot],
   co-authored by the Claude models only. To run it locally, set `ANTHROPIC_BASE_URL` to the magpie gateway
   (`http://127.0.0.1:3425`) and any `ANTHROPIC_API_KEY`.

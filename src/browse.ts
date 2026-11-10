@@ -88,8 +88,8 @@ export function recentlyAdded(ahead = false): Promise<Browse> {
   return kept(
     "recentlyAdded",
     { maxAge: LIST_KEPT },
-    async (pause) => {
-      const items = await allPages("/v1/me/library/recently-added", { limit: 25 }, 100, pause);
+    async (pause, urgent) => {
+      const items = await allPages("/v1/me/library/recently-added", { limit: 25 }, 100, pause, urgent);
       return {
         title: t("Recently Added"),
         sections: [

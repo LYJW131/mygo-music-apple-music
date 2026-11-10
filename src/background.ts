@@ -58,12 +58,13 @@ const KEPT_MOST = 200;
 /**
  * The answer for key, kept or fetched with load. ahead marks a fetch for the
  * background, whose load calls pause between its requests to wait for the
- * app; the app's own don't wait.
+ * app, and asks one thing at a time while urgent says false; the app's own,
+ * and one the app comes to ask for, don't wait.
  */
 export function kept<T>(
   key: string,
   fresh: Freshness,
-  load: (pause: () => Promise<void>) => Promise<T>,
+  load: (pause: () => Promise<void>, urgent: () => boolean) => Promise<T>,
   ahead = false,
 ): Promise<T> {
   const e = entries.get(key);
@@ -83,7 +84,7 @@ export function kept<T>(
     else if (e?.at) entries.set(key, { ...e, job: undefined });
     else entries.delete(key);
   };
-  job.promise = load(pause).then(
+  job.promise = load(pause, () => job.urgent).then(
     (value) => {
       done(true, value);
       return value;

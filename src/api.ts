@@ -112,22 +112,56 @@ export function first(body: Body | null): Resource {
   return item;
 }
 
-/** Every page of a list, up to `max` items, calling pause between pages. */
+/** How many pages of a list are asked for at once while the app waits for it. */
+const PAGES_AT_ONCE = 3;
+
+/**
+ * next, the address Apple gives of a list's next page, with the parameters
+ * the first page was asked with that it leaves out: Apple's says the offset
+ * only, and without the limit the pages after the first come 25 at a time.
+ */
+export function continued(next: string, params: Params): string {
+  const url = new URL(next, AMP);
+  for (const [k, v] of Object.entries(params ?? {})) {
+    if (v !== undefined && v !== null && v !== "" && !url.searchParams.has(k)) url.searchParams.set(k, String(v));
+  }
+  return url.pathname + url.search;
+}
+
+/**
+ * Every page of a list, up to `max` items. In the background, one page at a
+ * time, calling pause between them. While the app waits for it (urgent, by
+ * default), the pages after the first come a few at once, by their offsets,
+ * once the first has said how long the list is.
+ */
 export async function allPages(
   path: string,
   params: Params,
   max = 1000,
   pause?: () => Promise<void>,
+  urgent: () => boolean = () => true,
 ): Promise<Resource[]> {
   if (path.startsWith("/v1/me")) needAccount();
   const out: Resource[] = [];
+  let total: number | undefined;
+  let size = 0;
   let next: string | undefined = path + query(params);
   while (next && out.length < max) {
     if (out.length && pause) await pause();
-    const body: Body | null = await request(AMP + next);
-    out.push(...(body?.data ?? []));
-    next = body?.next;
-    if (next && !next.startsWith("/")) next = new URL(next).pathname + new URL(next).search;
+    const pages: string[] = [continued(next, params)];
+    const url = new URL(pages[0], AMP);
+    const offset = Number(url.searchParams.get("offset"));
+    if (urgent() && total !== undefined && size > 0 && offset > 0) {
+      for (let i = 1; i < PAGES_AT_ONCE && offset + i * size < Math.min(total, max); i++) {
+        url.searchParams.set("offset", String(offset + i * size));
+        pages.push(url.pathname + url.search);
+      }
+    }
+    const bodies: (Body | null)[] = await Promise.all(pages.map((page) => request(AMP + page)));
+    for (const body of bodies) out.push(...(body?.data ?? []));
+    total ??= bodies[0]?.meta?.total;
+    size ||= bodies[0]?.data?.length ?? 0;
+    next = bodies[bodies.length - 1]?.next;
   }
   return out;
 }

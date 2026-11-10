@@ -34,8 +34,8 @@ export function libraryPlaylists(ahead = false): Promise<Resource[]> {
   return kept(
     "playlists",
     { maxAge: ahead ? 60 * 1000 : 0 },
-    async (pause) => {
-      const lists = await allPages("/v1/me/library/playlists", { limit: 100 }, 500, pause);
+    async (pause, urgent) => {
+      const lists = await allPages("/v1/me/library/playlists", { limit: 100 }, 500, pause, urgent);
       changed.clear();
       favoritesID = null;
       for (const p of lists) {

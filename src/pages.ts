@@ -80,10 +80,10 @@ export function libraryPlaylist(id: string, ahead = false): Promise<Playlist> {
   return kept(
     `playlist:${id}`,
     playlistFreshness(id),
-    async (pause) => {
+    async (pause, urgent) => {
       const body = await me(`/library/playlists/${id}`);
       await pause();
-      const tracks = await allPages(`/v1/me/library/playlists/${id}/tracks`, { limit: 100 }, 5000, pause).catch(
+      const tracks = await allPages(`/v1/me/library/playlists/${id}/tracks`, { limit: 100 }, 5000, pause, urgent).catch(
         (e: unknown) => {
           if (codeOf(e) === "unavailable") return []; // an empty playlist has no tracks to find
           throw e;

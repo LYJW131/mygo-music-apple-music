@@ -66,6 +66,8 @@ export interface Resource {
 export interface Body {
   data?: Resource[];
   next?: string;
+  /** How many the whole list has, which the library's lists say. */
+  meta?: { total?: number };
 }
 
 export interface SearchBody {

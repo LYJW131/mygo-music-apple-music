@@ -5,8 +5,11 @@
 //
 // With --fix, a report that says the plugin needs a change is followed by the
 // change: the model makes it in the plugin's tree, `npm run check` has to
-// pass, and fix.json and changes.json (the commit, for propose.ts) are written
-// next to the report.
+// pass, and fix.json and fix-changes.json (the commit, for propose.ts) are
+// written next to the report. With --feature, a report that says the release
+// lifts an entry of the README's list of what the plugin can't do is followed
+// by the feature, made the same way from the same commit, and checked end to
+// end as well: feature.json and feature-changes.json.
 //
 // In GitHub Actions it signs in to the Anthropic API with the job's OIDC
 // token (workload identity federation, the ANTHROPIC_* variables the workflow
@@ -22,13 +25,31 @@ import type {
   BetaToolResultBlockParam,
 } from "@anthropic-ai/sdk/resources/beta/messages/messages";
 import { randomBytes } from "node:crypto";
-import { appendFileSync, createWriteStream, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  createWriteStream,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { checkFix, FIX_SCHEMA, isFix, type Fix } from "./upstream-watch/fix.ts";
-import { first, fixRequest, system, type Places } from "./upstream-watch/prompt.ts";
-import { isReport, REPORT_SCHEMA, type Report, type Usage } from "./upstream-watch/report.ts";
+import { HARD } from "./upstream-watch/breakers.ts";
+import { checkFix, FIX_SCHEMA, isFix, type Fix, type Kind } from "./upstream-watch/fix.ts";
+import { limitEntry, limitNames, limitsSection } from "./upstream-watch/limits.ts";
+import { featureRequest, first, fixRequest, system, type Places } from "./upstream-watch/prompt.ts";
+import {
+  checkUnlocked,
+  isReport,
+  REPORT_SCHEMA,
+  toMake,
+  type OpenPull,
+  type Report,
+  type Usage,
+} from "./upstream-watch/report.ts";
 import { clip, hasBwrap, quote, run, type Ran } from "./upstream-watch/sandbox.ts";
 
 const { values: args } = parseArgs({
@@ -49,11 +70,16 @@ const { values: args } = parseArgs({
     fix: { type: "boolean", default: false },
     "fix-minutes": { type: "string", default: "20" },
     "fix-dollars": { type: "string", default: "10" },
+    feature: { type: "boolean", default: false },
+    "feature-minutes": { type: "string", default: "20" },
+    "feature-dollars": { type: "string", default: "10" },
+    // The draft pull requests earlier checks left open, as JSON (OpenPull[]).
+    pulls: { type: "string" },
   },
 });
 if (!args.upstream || !args.base || !args.target || !args.out) {
   console.error(
-    "usage: upstream-watch.ts --upstream DIR --base TAG --target TAG --out DIR [--notes FILE] [--plugin DIR] [--fakeapple PATH] [--fix]",
+    "usage: upstream-watch.ts --upstream DIR --base TAG --target TAG --out DIR [--notes FILE] [--plugin DIR] [--fakeapple PATH] [--pulls FILE] [--fix] [--feature]",
   );
   process.exit(2);
 }
@@ -62,16 +88,16 @@ const effort = args.effort as (typeof EFFORTS)[number];
 if (!EFFORTS.includes(effort)) throw new Error(`--effort is one of ${EFFORTS.join(", ")}`);
 const fast = args.speed === "fast";
 if (!fast && args.speed !== "standard") throw new Error("--speed is standard or fast");
-// Breakers, for the check and then the fix: past the soft limits the model is
-// told to hand in what it has; past the hard ones, half as much again, that
-// phase stops without it.
+// Breakers, for the check, the fix and the feature (breakers.ts).
 const minutes = Number(args.minutes);
 const dollars = Number(args.dollars);
 const fixMinutes = Number(args["fix-minutes"]);
 const fixDollars = Number(args["fix-dollars"]);
+const featureMinutes = Number(args["feature-minutes"]);
+const featureDollars = Number(args["feature-dollars"]);
 const MOST_TURNS = 150;
-if (![minutes, dollars, fixMinutes, fixDollars].every((n) => n > 0))
-  throw new Error("--minutes, --dollars, --fix-minutes and --fix-dollars are positive numbers");
+if (![minutes, dollars, fixMinutes, fixDollars, featureMinutes, featureDollars].every((n) => n > 0))
+  throw new Error("--minutes, --dollars and the --fix- and --feature- ones are positive numbers");
 
 const plugin = resolve(args.plugin);
 const upstream = resolve(args.upstream);
@@ -145,6 +171,31 @@ const notes = args.notes ? readFileSync(args.notes, "utf8") : "";
 // The plugin commit checked, which a fix is made on.
 const pluginHead = (await pluginGit("rev-parse HEAD")).output.trim();
 if (!/^[0-9a-f]{40}$/.test(pluginHead)) throw new Error(`${plugin} isn't a git checkout`);
+// The list of what the plugin can't do, from the commit checked: an old one
+// may have none.
+const readme = join(plugin, "README.md");
+const limits = existsSync(readme) ? limitsSection(readFileSync(readme, "utf8")) : null;
+const names = limits ? limitNames(limits) : [];
+const open: OpenPull[] = args.pulls ? openPulls(readFileSync(args.pulls, "utf8")) : [];
+// A feature is played end to end in MyGo's host at the oldest version the
+// plugin takes and the release it comes with, where the plugin has the test.
+const oldest = (JSON.parse(readFileSync(join(plugin, "plugin.json"), "utf8")) as { minAppVersion?: string })
+  .minAppVersion;
+const e2e =
+  existsSync(join(plugin, "scripts/e2e.ts")) && oldest ? [...new Set([oldest, args.target.replace(/^v/, "")])] : [];
+
+function openPulls(text: string): OpenPull[] {
+  const list: unknown = text.trim() ? JSON.parse(text) : [];
+  if (!Array.isArray(list)) throw new Error("--pulls isn't a JSON array");
+  return list.filter(
+    (p): p is OpenPull =>
+      !!p &&
+      typeof p.url === "string" &&
+      typeof p.title === "string" &&
+      (p.kind === "fix" || p.kind === "feature") &&
+      Array.isArray(p.limits),
+  );
+}
 
 const tools: BetaTool[] = [
   {
@@ -203,16 +254,26 @@ const tools: BetaTool[] = [
     input_schema: FIX_SCHEMA as unknown as BetaTool["input_schema"],
     strict: true,
   },
+  {
+    name: "submit_feature",
+    description:
+      "Only when asked, after the report: hands in the feature you made in the plugin's tree. npm run check and the end-to-end test run on it first; if one fails you get its output, so fix it and call again.",
+    input_schema: FIX_SCHEMA as unknown as BetaTool["input_schema"],
+    strict: true,
+  },
 ];
 
 let report: Report | null = null;
-let fix: Fix | null = null;
-let fixing = false;
+// What the model handed in of each kind, and the kind it's asked for now.
+const made: Partial<Record<Kind, Fix>> = {};
+let asked: Kind | null = null;
+// The entries the feature handed in takes out of the list.
+let lifted: string[] = [];
 let toolCalls = 0;
 // The models that answered: the server can fall back to another.
 const models = new Set<string>();
 // When the phase under way stops, which bash's timeouts keep to.
-let hardStop = started + minutes * 1.5 * 60_000;
+let hardStop = started + minutes * HARD * 60_000;
 
 async function call(name: string, input: Record<string, unknown>): Promise<string> {
   toolCalls++;
@@ -256,15 +317,21 @@ async function call(name: string, input: Record<string, unknown>): Promise<strin
       );
       return `exit ${r.code}\n${clip(r.output, 10_000)}`;
     }
-    case "submit_report":
+    case "submit_report": {
       if (report) throw new Error("The report is in already.");
       if (!isReport(input)) throw new Error("The report doesn't match the schema.");
+      const wrong = checkUnlocked(input, names);
+      if (wrong) throw new Error(`The report: ${wrong}.`);
       report = input;
       return "Received.";
+    }
     case "submit_fix":
-      if (!fixing) throw new Error("Not now: only when you're asked to make the fix, after the report.");
-      if (!isFix(input)) throw new Error("The fix doesn't match the schema.");
-      return takeFix(input);
+    case "submit_feature": {
+      const kind: Kind = name === "submit_fix" ? "fix" : "feature";
+      if (asked !== kind) throw new Error(`Not now: only when you're asked to make the ${kind}, after the report.`);
+      if (!isFix(input)) throw new Error(`The ${kind} doesn't match the schema.`);
+      return take(kind, input);
+    }
     default:
       throw new Error(`No tool ${name}`);
   }
@@ -274,8 +341,8 @@ async function call(name: string, input: Record<string, unknown>): Promise<strin
 type Changes = { additions: { path: string; contents: string }[]; deletions: { path: string }[] };
 
 // Checks the change in the plugin's tree, and keeps it as one commit's files.
-async function takeFix(input: Fix): Promise<string> {
-  const wrong = checkFix(input);
+async function take(kind: Kind, input: Fix): Promise<string> {
+  const wrong = checkFix(input, kind);
   if (wrong) throw new Error(`The message: ${wrong}.`);
   const staged = await pluginGit("add -A");
   if (staged.code !== 0) throw new Error(staged.output.trim());
@@ -288,8 +355,31 @@ async function takeFix(input: Fix): Promise<string> {
   const workflows = files.filter((f) => f.path.startsWith(".github/"));
   if (workflows.length)
     throw new Error(`Leave .github/ alone (${workflows.map((f) => f.path).join(", ")}); undo that and call again.`);
-  const check = await sh("npm run check 2>&1", Math.max(Math.min(hardStop - Date.now(), 20 * 60_000), 60_000));
+  // The list is the README's, in both languages: a feature that leaves it as
+  // it was would be reported as still missing.
+  const readmes = ["README.md", "README.en.md"].filter((r) => !files.some((f) => f.path === r));
+  if (kind === "feature" && readmes.length)
+    throw new Error(`Change the list and the comparison in ${readmes.join(" and ")} too, then call again.`);
+  // What the pull request says it lifts is what it took out of README.md's
+  // list or rewrote there, so a later check makes any entry it left.
+  if (kind === "feature") {
+    const now = limitsSection(readFileSync(readme, "utf8")) ?? "";
+    lifted = features
+      .map((u) => u.limit.trim())
+      .filter((name) => limitEntry(limits ?? "", name) !== limitEntry(now, name));
+    if (!lifted.length)
+      throw new Error("README.md's list has each entry as it was: take out or rewrite what you made, then call again.");
+  }
+  const left = () => Math.max(Math.min(hardStop - Date.now(), 20 * 60_000), 60_000);
+  const check = await sh("npm run check 2>&1", left());
   if (check.code !== 0) throw new Error(`npm run check failed (exit ${check.code}):\n${clip(check.output, 12_000)}`);
+  if (kind === "feature" && e2e.length) {
+    const played = await sh(`node scripts/e2e.ts ${e2e.map(quote).join(" ")} 2>&1`, left());
+    if (played.code !== 0)
+      throw new Error(
+        `node scripts/e2e.ts ${e2e.join(" ")} failed (exit ${played.code}):\n${clip(played.output, 12_000)}`,
+      );
+  }
   const changes: Changes = { additions: [], deletions: [] };
   for (const file of files) {
     if (file.status === "D") changes.deletions.push({ path: file.path });
@@ -297,16 +387,17 @@ async function takeFix(input: Fix): Promise<string> {
       changes.additions.push({ path: file.path, contents: readFileSync(join(plugin, file.path)).toString("base64") });
   }
   const patch = await pluginGit(`diff --cached --binary ${pluginHead}`);
-  writeFileSync(join(out, "fix.patch"), patch.output);
-  writeFileSync(join(out, "changes.json"), JSON.stringify(changes));
-  fix = input;
-  return `Received: npm run check passed, ${files.length} files changed.`;
+  writeFileSync(join(out, `${kind}.patch`), patch.output);
+  writeFileSync(join(out, `${kind}-changes.json`), JSON.stringify(changes));
+  made[kind] = input;
+  const ran = kind === "feature" && e2e.length ? "npm run check and the end-to-end test" : "npm run check";
+  return `Received: ${ran} passed, ${files.length} files changed.`;
 }
 
 const transcript = createWriteStream(join(out, "transcript.jsonl"), { flags: "w" });
 const log = (entry: object) => transcript.write(`${JSON.stringify({ at: new Date().toISOString(), ...entry })}\n`);
 
-const messages: BetaMessageParam[] = [{ role: "user", content: first(places, notes, commits, stat) }];
+const messages: BetaMessageParam[] = [{ role: "user", content: first(places, notes, commits, stat, limits, open) }];
 const systemText = system(places);
 log({ system: systemText, first: messages[0]!.content });
 
@@ -334,18 +425,19 @@ type Phase = {
 };
 
 // Talks until the phase's tool has been called. The conversation carries on
-// from one phase to the next, so the fix is made knowing the check.
+// from one phase to the next, so the fix and the feature are made knowing the
+// check.
 async function converse(phase: Phase): Promise<void> {
   const begun = Date.now();
   const before = spent();
   const turnsBefore = turns;
-  hardStop = begun + phase.minutes * 1.5 * 60_000;
+  hardStop = begun + phase.minutes * HARD * 60_000;
   let nudges = 0;
   let warned = false;
   while (!phase.done()) {
-    if (Date.now() > hardStop) throw new Error(`没在 ${phase.minutes * 1.5} 分钟内交${phase.thing}，按时间熔断`);
-    if (spent() - before > phase.dollars * 1.5)
-      throw new Error(`花费超过 $${phase.dollars * 1.5} 还没交${phase.thing}，按花费熔断`);
+    if (Date.now() > hardStop) throw new Error(`没在 ${phase.minutes * HARD} 分钟内交${phase.thing}，按时间熔断`);
+    if (spent() - before > phase.dollars * HARD)
+      throw new Error(`花费超过 $${phase.dollars * HARD} 还没交${phase.thing}，按花费熔断`);
     if (turns - turnsBefore >= MOST_TURNS) throw new Error(`${MOST_TURNS} 轮还没交${phase.thing}，按轮数熔断`);
     turns++;
     const message = await client.beta.messages
@@ -415,8 +507,8 @@ async function converse(phase: Phase): Promise<void> {
         .flatMap((b) => (b.type === "text" ? [b.text.trim()] : []))
         .join(" ")
         .slice(0, 600);
-      // It may decline to make a fix, as it was told it could.
-      if (phase.tool === "submit_fix") throw new Error(`Claude 没做修改${said ? `：${said}` : ""}`);
+      // It may decline to make a fix or a feature, as it was told it could.
+      if (phase.tool !== "submit_report") throw new Error(`Claude 没做${phase.thing}${said ? `：${said}` : ""}`);
       if (++nudges > 2) throw new Error(`the model stopped without the ${phase.tool}`);
       reply.push({ type: "text", text: `You haven't called ${phase.tool}. Finish what is needed, then call it.` });
     }
@@ -435,7 +527,7 @@ async function converse(phase: Phase): Promise<void> {
         text:
           phase.tool === "submit_report"
             ? `The ${over} is used up. Call submit_report now with what you have; put what you didn't get to in unverified.`
-            : `The ${over} for the fix is used up. If npm run check passes, call submit_fix now; if it can't, stop.`,
+            : `The ${over} for the ${phase.tool.replace("submit_", "")} is used up. If what ${phase.tool} runs passes, call it now; if it can't, stop.`,
       });
     }
     messages.push({ role: "user", content: reply });
@@ -451,35 +543,61 @@ async function result(id: string, work: () => Promise<string>): Promise<BetaTool
 }
 
 let failure: string | null = null;
-let fixFailure: string | null = null;
+const failures: Partial<Record<Kind, string>> = {};
 try {
   await converse({ tool: "submit_report", thing: "报告", done: () => !!report, minutes, dollars });
 } catch (error) {
   failure = error instanceof Error ? error.message : String(error);
   console.error(error);
 }
+// Out before the fix and the feature, so a run stopped during them still
+// has its report.
+if (report) {
+  writeFileSync(join(out, "report.json"), JSON.stringify(report, null, 2));
+  output("report", JSON.stringify(report));
+}
+output("limits", String(!!limits));
 
-const verdict = (report as Report | null)?.verdict;
-if (args.fix && (verdict === "needed" || verdict === "breaking")) {
+// Asks for a change of the kind, from the plugin commit checked: what the
+// model did to the tree before (checking, or the other change) isn't it.
+async function change(kind: Kind, request: string, phaseMinutes: number, phaseDollars: number) {
   try {
-    // What the model did to the tree while checking isn't the fix.
     const reset = await pluginGit(`reset -q --hard ${pluginHead} && git -C ${quote(plugin)} clean -fdq`);
     if (reset.code !== 0) throw new Error(`还原插件目录失败：${reset.output.trim()}`);
+    // After a phase that ended on the model's word (a fix it declined), the
+    // request is a turn of its own; otherwise it goes with the last results.
     const last = messages.at(-1)!;
-    (last.content as BetaContentBlockParam[]).push({ type: "text", text: fixRequest(places, fixMinutes, fixDollars) });
-    fixing = true;
+    if (last.role === "user") (last.content as BetaContentBlockParam[]).push({ type: "text", text: request });
+    else messages.push({ role: "user", content: [{ type: "text", text: request }] });
+    asked = kind;
     await converse({
-      tool: "submit_fix",
-      thing: "修改",
-      done: () => !!fix,
-      minutes: fixMinutes,
-      dollars: fixDollars,
+      tool: `submit_${kind}`,
+      thing: kind === "fix" ? "修改" : "新功能",
+      done: () => !!made[kind],
+      minutes: phaseMinutes,
+      dollars: phaseDollars,
     });
   } catch (error) {
-    fixFailure = error instanceof Error ? error.message : String(error);
+    failures[kind] = error instanceof Error ? error.message : String(error);
     console.error(error);
+  } finally {
+    asked = null;
   }
 }
+
+const checked = report as Report | null;
+if (args.fix && (checked?.verdict === "needed" || checked?.verdict === "breaking"))
+  await change("fix", fixRequest(places, fixMinutes, fixDollars), fixMinutes, fixDollars);
+const features = checked ? toMake(checked, open) : [];
+if (features.length && !args.feature)
+  failures.feature = "这次运行没开「做新功能」（手动关掉了，或检查的插件版本不在分支上）";
+else if (features.length)
+  await change(
+    "feature",
+    featureRequest(places, features, e2e, featureMinutes, featureDollars),
+    featureMinutes,
+    featureDollars,
+  );
 
 const cost = spent();
 const usage: Usage = {
@@ -493,16 +611,27 @@ const usage: Usage = {
 console.error(JSON.stringify({ usage, totals, models: [...models], sandbox: bwrap ? "bwrap" : "none" }));
 await new Promise<void>((done) => transcript.end(done));
 writeFileSync(join(out, "usage.json"), JSON.stringify(usage));
-if (report) writeFileSync(join(out, "report.json"), JSON.stringify(report, null, 2));
 if (failure) writeFileSync(join(out, "failure.txt"), failure);
-if (fix)
-  writeFileSync(join(out, "fix.json"), JSON.stringify({ ...(fix as Fix), models: [...models], base: pluginHead }));
-if (fixFailure) writeFileSync(join(out, "fix-failure.txt"), fixFailure);
 output("usage", JSON.stringify(usage));
-if (report) output("report", JSON.stringify(report));
 if (failure && !report) output("failure", failure);
-if (fix) output("fix", "true");
-if (fixFailure) output("fix_failure", fixFailure);
+for (const kind of ["fix", "feature"] as const) {
+  const handed = made[kind];
+  if (handed) {
+    // A feature carries what propose.ts says of it: the entries it lifts and
+    // the MyGo versions it was played in.
+    const extra = kind === "feature" ? { limits: lifted, e2e } : {};
+    writeFileSync(
+      join(out, `${kind}.json`),
+      JSON.stringify({ ...handed, ...extra, models: [...models], base: pluginHead }),
+    );
+    output(kind, "true");
+  }
+  const why = failures[kind];
+  if (why) {
+    writeFileSync(join(out, `${kind}-failure.txt`), why);
+    output(`${kind}_failure`, why);
+  }
+}
 process.exit(report ? 0 : 1);
 
 function output(name: string, value: string) {

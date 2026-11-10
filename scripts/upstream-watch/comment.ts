@@ -1,9 +1,12 @@
 // Prints the issue comment for a run of upstream-watch.ts, from what the
 // Upstream workflow passes on: REPORT (its JSON) or, when there is none,
 // FAILURE; USAGE; BASE, TARGET, UPSTREAM, RUN_URL, AUTO ("true" for a
-// scheduled run), PLUGIN_REF with PLUGIN_URL, and PULL_URL or PULL_FAILURE.
+// scheduled run), PLUGIN_REF with PLUGIN_URL, PULL_URL or PULL_FAILURE (the
+// fix's), FEATURE_URL or FEATURE_FAILURE, LIMITS ("false" when the plugin
+// checked has no list of what it can't do) and PULLS (the draft pull requests
+// open before the run, as JSON).
 
-import { isReport, render, renderFailure, type Run } from "./report.ts";
+import { isReport, render, renderFailure, type OpenPull, type Run } from "./report.ts";
 
 const env = (name: string) => process.env[name] ?? "";
 const parse = (text: string): unknown => {
@@ -14,6 +17,7 @@ const parse = (text: string): unknown => {
   }
 };
 const usage = parse(env("USAGE"));
+const open = parse(env("PULLS"));
 const run: Run = {
   base: env("BASE"),
   target: env("TARGET"),
@@ -22,6 +26,10 @@ const run: Run = {
   auto: env("AUTO") === "true",
   pull: env("PULL_URL") || undefined,
   pullFailure: env("PULL_FAILURE") || undefined,
+  featurePull: env("FEATURE_URL") || undefined,
+  featureFailure: env("FEATURE_FAILURE") || undefined,
+  limits: env("LIMITS") !== "false",
+  open: Array.isArray(open) ? (open as OpenPull[]) : undefined,
   plugin: env("PLUGIN_REF") ? { ref: env("PLUGIN_REF"), url: env("PLUGIN_URL") } : undefined,
   usage: usage && typeof usage === "object" ? (usage as Run["usage"]) : undefined,
 };

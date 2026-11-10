@@ -84,12 +84,20 @@ and tests amhelper.
   (Anthropic API through GitHub OIDC, no key) reads the diff against the plugin, runs what it can on the runner, and
   `scripts/upstream-watch/report.ts` turns its report into a comment by lyjw131[bot] on the open Automation issue.
   Commands run under bubblewrap only to keep the job's OIDC request token from them. It runs Fable 5.2 in fast mode
-  (twice the price). Breakers: 30 minutes and $20 a run (then it is told to hand in; past 1.5 times either it stops),
-  and 3 automatic runs a day. When the report says the plugin needs a change, the same conversation makes it (20
-  minutes and $20 more, `npm run check` must pass, no `.github/`), and `scripts/upstream-watch/propose.ts` opens a
-  draft pull request of one commit, made through `createCommitOnBranch` so GitHub signs it as lyjw131[bot],
-  co-authored by the Claude models only. To run it locally, set `ANTHROPIC_BASE_URL` to the magpie gateway
-  (`http://127.0.0.1:3425`) and any `ANTHROPIC_API_KEY`.
+  (twice the price). When the report says the plugin needs a change, the same conversation makes it (`npm run check`
+  must pass, no `.github/`). The report also says which entries of README.md's list of what the plugin can't do
+  (`#limits`, with the comparison above it; `scripts/upstream-watch/limits.ts` cuts it out, and it is the only list)
+  the release lifts, by MyGo's files and symbols; one the model is sure of and can show working here is made next,
+  from the same plugin commit without the fix (`npm run check` and `scripts/e2e.ts` at `minAppVersion` and the release
+  must pass, and both READMEs' list and comparison change with it). Breakers (`scripts/upstream-watch/breakers.ts`):
+  the check 30 minutes and $20, the fix and the feature 20 minutes and $20 each (past them the model is told to hand
+  in; past 1.5 times the phase stops), so at worst 105 minutes and $90 a run, and 3 automatic runs a day.
+  `scripts/upstream-watch/propose.ts` opens a draft pull request of one commit for each, the fix on
+  `upstream/mygo-<tag>` and the feature (`feat`) on `upstream/mygo-<tag>-feature`, each naming the other, made through
+  `createCommitOnBranch` so GitHub signs it as lyjw131[bot], co-authored by the Claude models only. An open one for
+  the same release is reused; an open feature one marks the entries it lifts in its description, and later checks
+  don't make those again. `workflow_dispatch`'s `draft_pr` and `feature_pr` turn either off. To run it locally, set
+  `ANTHROPIC_BASE_URL` to the magpie gateway (`http://127.0.0.1:3425`) and any `ANTHROPIC_API_KEY`.
   `helper/cmd/fakeapple` stands in for a wrapper and Apple's CDN (Temari's published sample, looped, and the web
   player's CENC AAC, made from `testdata/tone.aac`), so amhelper runs end to end without an account; amhelper asks it
   for Apple's files when `AMHELPER_APPLE` is set.

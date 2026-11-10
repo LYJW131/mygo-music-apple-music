@@ -6,6 +6,19 @@ export const VERDICTS = ["none", "optional", "needed", "breaking"] as const;
 export type Verdict = (typeof VERDICTS)[number];
 const SEVERITIES = ["breaking", "needed", "optional"] as const;
 const RESULTS = ["pass", "fail", "error", "skipped"] as const;
+// ready: made in a pull request of its own, after the report. later: it can
+// be done, but not here and now (the reason says why). unsure: it may be.
+const UNLOCKED = ["ready", "later", "unsure"] as const;
+
+export type Unlocked = {
+  limit: string;
+  features: string;
+  upstream: string;
+  plugin: string;
+  evidence: string;
+  status: (typeof UNLOCKED)[number];
+  why: string;
+};
 
 export type Report = {
   verdict: Verdict;
@@ -21,6 +34,7 @@ export type Report = {
   ruledOut: { change: string; why: string }[];
   checks: { what: string; command: string; result: (typeof RESULTS)[number]; detail: string }[];
   unverified: string;
+  unlocked: Unlocked[];
 };
 
 const text = (description: string) => ({ type: "string", description });
@@ -28,7 +42,7 @@ const text = (description: string) => ({ type: "string", description });
 export const REPORT_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["verdict", "summary", "impacts", "ruledOut", "checks", "unverified"],
+  required: ["verdict", "summary", "impacts", "ruledOut", "checks", "unverified", "unlocked"],
   properties: {
     verdict: {
       type: "string",
@@ -80,6 +94,32 @@ export const REPORT_SCHEMA = {
       },
     },
     unverified: text("What you could not check here (signed-in calls, real playback…), or an empty string."),
+    unlocked: {
+      type: "array",
+      description:
+        "The entries of the plugin's list of what it can't do that this release makes possible, each by what MyGo's code now gives. Empty when none is, or when there is no list.",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["limit", "features", "upstream", "plugin", "evidence", "status", "why"],
+        properties: {
+          limit: text("The entry's name, exactly as the list writes it in bold."),
+          features: text("The rows of the comparison that it lets the plugin have."),
+          upstream: text(
+            "What MyGo now gives: PR numbers as #123, commits, and the files and symbols (an export, a field, a callback, a setting type).",
+          ),
+          plugin: text("Where the plugin would take it up: files and functions."),
+          evidence: text("How you know, from the code and what you ran; a release note alone is not enough."),
+          status: {
+            type: "string",
+            enum: [...UNLOCKED],
+            description:
+              "ready: you are sure, and it can be made whole and shown to work on this runner, so it will be. later: it can be done, but not completely or not verifiably here. unsure: it may be possible; you couldn't tell.",
+          },
+          why: text("ready: what you would make and how you'd show it works. later or unsure: why not now."),
+        },
+      },
+    },
   },
 } as const;
 
@@ -92,8 +132,33 @@ export function isReport(value: unknown): value is Report {
     Array.isArray(r.impacts) &&
     Array.isArray(r.ruledOut) &&
     Array.isArray(r.checks) &&
-    typeof r.unverified === "string"
+    typeof r.unverified === "string" &&
+    Array.isArray(r.unlocked)
   );
+}
+
+// An open draft pull request an earlier check left, as the workflow lists
+// them: the limits a feature's lifts are marked in its description.
+export type OpenPull = { url: string; title: string; kind: "fix" | "feature"; limits: string[] };
+
+export const LIMIT_MARKER = (limit: string) => `<!-- mygo-upstream limit ${limit} -->`;
+
+// The open feature pull request that makes this entry already, if any.
+export const proposedIn = (limit: string, open: OpenPull[] = []) =>
+  open.find((p) => p.kind === "feature" && p.limits.includes(limit.trim()));
+
+// What a feature is made of: the entries the model is sure of, less those an
+// open pull request makes already.
+export const toMake = (report: Report, open: OpenPull[] = []) =>
+  report.unlocked.filter((u) => u.status === "ready" && !proposedIn(u.limit, open));
+
+// What is wrong with the report's unlocked entries, given the list's names,
+// or null. A name the list doesn't have would take nothing out of it.
+export function checkUnlocked(report: Report, names: string[]): string | null {
+  if (!names.length && report.unlocked.length) return "unlocked is empty: this plugin commit has no list";
+  const unknown = report.unlocked.filter((u) => !names.includes(u.limit.trim())).map((u) => u.limit);
+  if (unknown.length) return `unlocked names ${unknown.join(", ")}, not in the list (${names.join(", ")})`;
+  return null;
 }
 
 // "auto" marks a scheduled run's comment: only those count against the daily
@@ -111,6 +176,11 @@ const SEVERITY_TEXT: Record<Report["impacts"][number]["severity"], string> = {
   breaking: "已失效",
   needed: "需要改",
   optional: "可选",
+};
+const UNLOCKED_TEXT: Record<Unlocked["status"], string> = {
+  ready: "能做",
+  later: "可以做，没做",
+  unsure: "不确定，没做",
 };
 const RESULT_TEXT: Record<Report["checks"][number]["result"], string> = {
   pass: "✅ 通过",
@@ -145,9 +215,16 @@ export type Run = {
   // The plugin commit or tag checked, and a link to it: a report on an old
   // one says what that one needed, not what main does.
   plugin?: { ref: string; url: string };
-  // The draft pull request with the fix, or why there is none.
+  // The draft pull requests with the fix and the feature, or why there are
+  // none.
   pull?: string;
   pullFailure?: string;
+  featurePull?: string;
+  featureFailure?: string;
+  // false when the plugin checked has no list of what it can't do.
+  limits?: boolean;
+  // Draft pull requests earlier checks left open.
+  open?: OpenPull[];
   usage?: Usage;
 };
 export type Usage = {
@@ -182,6 +259,7 @@ export function render(report: Report, run: Run): string {
       );
     });
   }
+  lines.push("", ...unlockedLines(report, run));
   if (report.ruledOut.length) {
     lines.push("", "<details><summary>已排查、不受影响（" + report.ruledOut.length + "）</summary>", "");
     for (const item of report.ruledOut) lines.push(`- ${cell(item.change)}：${cell(item.why)}`);
@@ -215,9 +293,34 @@ export function renderFailure(run: Run, reason: string): string {
 }
 
 function pullLine(run: Run): string[] {
-  if (run.pull) return ["", `**草稿 PR：${run.pull}**`];
-  if (run.pullFailure) return ["", `没生成草稿 PR：${cell(run.pullFailure)}`];
-  return [];
+  const lines: string[] = [];
+  if (run.pull) lines.push("", `**修复草稿 PR：${run.pull}**`);
+  else if (run.pullFailure) lines.push("", `没生成修复草稿 PR：${cell(run.pullFailure)}`);
+  if (run.featurePull) lines.push("", `**新功能草稿 PR：${run.featurePull}**`);
+  else if (run.featureFailure) lines.push("", `没生成新功能草稿 PR：${cell(run.featureFailure)}`);
+  return lines;
+}
+
+// Whether the release lifts an entry of the plugin's list of what it can't
+// do, said either way.
+function unlockedLines(report: Report, run: Run): string[] {
+  const lines = ["### 这次更新让哪些原来做不到的功能做得到了", ""];
+  if (run.limits === false) return [...lines, "检查的插件版本里没有「插件方案的限制」清单，这一项没查。"];
+  if (!report.unlocked.length) return [...lines, "没有：这次更新没有解除「插件方案的限制」里的任何一条。"];
+  report.unlocked.forEach((u, i) => {
+    const open = proposedIn(u.limit, run.open);
+    lines.push(
+      ...(i ? [""] : []),
+      `${i + 1}. **${cell(u.limit)}**（${UNLOCKED_TEXT[u.status]}）`,
+      `   - 功能：${cell(u.features)}`,
+      `   - 上游：${cell(u.upstream)}`,
+      `   - 插件：${cell(u.plugin)}`,
+      `   - 依据：${cell(u.evidence)}`,
+      `   - ${u.status === "ready" ? "做法" : "原因"}：${cell(u.why)}`,
+      ...(u.status === "ready" && open ? [`   - 已有草稿 PR：${open.url}，这次没再做`] : []),
+    );
+  });
+  return lines;
 }
 
 function pluginLine(run: Run): string[] {

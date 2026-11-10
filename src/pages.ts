@@ -4,7 +4,7 @@
 
 import { allPages, catalog, first, me, storefront } from "./api.ts";
 import { kept } from "./background.ts";
-import { inLibrary, playlistFreshness } from "./library.ts";
+import { edited, inLibrary, playlistFreshness } from "./library.ts";
 import { songsOf, toAlbum, toArtist, toPlaylist } from "./models.ts";
 import { prefetch, warm } from "./prefetch.ts";
 import type { Resource } from "./types/apple.ts";
@@ -77,7 +77,15 @@ export function libraryPlaylist(id: string, ahead = false): Promise<Playlist> {
 export async function playlist({ id }: { id: string }): Promise<Playlist> {
   warm();
   if (id.startsWith("p.")) {
-    const found = await libraryPlaylist(id);
+    let found = await libraryPlaylist(id);
+    // As the listener last changed it, which Apple may not answer with yet.
+    const e = edited(id);
+    if (e?.deleted) throw fail("unavailable", t("Apple Music doesn't have this"));
+    if (e?.name) found = { ...found, name: e.name };
+    if (e?.tracks) {
+      const tracks = songsOf(e.tracks);
+      found = { ...found, tracks, trackCount: tracks.length };
+    }
     prefetch(found.tracks ?? []);
     return found;
   }

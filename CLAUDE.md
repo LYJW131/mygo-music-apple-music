@@ -20,6 +20,8 @@ npm run test:e2e     # plays AAC and ALAC through MyGo's own plugin host and pla
 npm run test:live    # signed out, real Apple API (not in CI)
 APPLE_MUSIC_TOKEN_FILE=… npm run test:signed-in   # signed in, plays one song through amhelper and ffmpeg (not in CI;
                                                   # npm run helper after its build, or it plays through ffmpeg twice)
+APPLE_MUSIC_WRITE_TOKEN_FILE=… npm run test:live-write   # changes an account kept for testing, and puts it back:
+                                                         # a playlist made, edited and deleted (not in CI)
 ```
 
 Node 22.18+ runs the `.ts` scripts and tests directly (type stripping); there is no tsx. Go (`helper/go.mod`) builds
@@ -66,6 +68,9 @@ and tests amhelper.
   app asks for anything and a second after. Answers are `kept`: a library playlist until its `lastModifiedDate`
   changes, the rest for 10 minutes; writes `forget` what they change. A function's second argument `ahead` marks a
   background call; the app only ever passes one.
+- Playlist edits (`library.ts`): renamed, deleted, songs taken out by their library IDs, a new order PUT whole. Apple
+  answers with the playlist as it was for a while after, its date too, so for 5 minutes the plugin answers with what
+  the listener made of it (`edited`).
 - Liked is Favorite Songs, the library playlist with `canDelete: false` and no catalog version, hidden from
   `playlists`; liking is a rating of 1.
 - Upstream watch: `.github/workflows/upstream.yml` runs `scripts/upstream-watch.ts` when MyGo releases. Claude Fable

@@ -24,6 +24,7 @@
   "Apple Music plays through ffmpeg, which isn't installed. Install it with your package manager (such as sudo pacman -S ffmpeg or sudo apt install ffmpeg), then play again.": "Apple Music 需要 ffmpeg 才能播放，但它还没有安装。请用包管理器安装（如 sudo pacman -S ffmpeg 或 sudo apt install ffmpeg），然后再播放。",
   "Apple Music sent no key for this song": "Apple Music 没有给出这首歌的密钥",
   "Apple Music sent no license": "Apple Music 没有返回许可证",
+  "The playlist changed elsewhere. Try again in a moment.": "歌单已在别处更改，请稍后再试。",
   "Apple Music won't play this song": "Apple Music 无法播放这首歌",
   "Couldn't read the Apple Music web player's token": "读取不到 Apple Music 网页播放器的令牌",
   "ffmpeg is installed but won't start. Reinstall it.": "ffmpeg 已安装但无法启动，请重新安装。",

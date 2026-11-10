@@ -3,16 +3,18 @@
 // a time, on 127.0.0.1, where the app plays them. The AAC the plugin gets the
 // key of itself (aac.go). The ALAC it asks a wrapper for: the playlist and
 // the key templates. It also keeps the covers of the listener's own
-// playlists (cover.go).
+// playlists (cover.go), and fetches the songs they uploaded (upload.go).
 //
 // The plugin starts it and writes one JSON line to its stdin, {"wrapper",
-// "token", "cache", "covers"}, the wrapper empty when there is none; it
-// answers one line, {"port", "secret"}, and serves under /<secret>/ until its
-// stdin closes:
+// "token", "cache", "covers", "uploads"}, the wrapper empty when there is
+// none; it answers one line, {"port", "secret"}, and serves under /<secret>/
+// until its stdin closes:
 //
 //	POST /<secret>/aac/<id>            {media, key, seconds}: the song's AAC
 //	GET /<secret>/aac/<id>.m4a         that song, decrypted, as fragmented MP4
 //	POST /<secret>/cover/<name>        {url}: keeps a playlist cover in covers
+//	POST /<secret>/upload/<id>         {url}: an uploaded song's link, answering {size}
+//	GET /<secret>/upload/<id>.m4a      that song, as it comes, kept in uploads once whole
 //	GET /<secret>/status               the wrapper's {ready, regions}
 //	POST /<secret>/wake                wakes the wrapper (one on Cloudflare sleeps)
 //	GET /<secret>/token?account=       an account's {token, region, next, account} (account.go)
@@ -58,8 +60,9 @@ import (
 type config struct {
 	Wrapper string `json:"wrapper"`
 	Token   string `json:"token"`
-	Cache   string `json:"cache"`  // a folder to keep keys and songs in; "" for none
-	Covers  string `json:"covers"` // a folder to keep playlist covers in; "" for none
+	Cache   string `json:"cache"`   // a folder to keep keys and songs in; "" for none
+	Covers  string `json:"covers"`  // a folder to keep playlist covers in; "" for none
+	Uploads string `json:"uploads"` // a folder to keep uploaded songs in; "" for none
 }
 
 func main() {
@@ -88,8 +91,10 @@ func main() {
 	}
 	secret := make([]byte, 16)
 	_, _ = rand.Read(secret)
-	s := &server{wrapper: w, store: st, cdn: cdnClient(os.Getenv("AMHELPER_APPLE")), tracks: newLRU[cachedTrack](tracksKept), resolving: map[string]*resolveCall{},
-		aac: newLRU[aacSong](aacKept), aacOpened: map[string]*openedMedia{}, covers: newCovers(cfg.Covers)}
+	cdn := cdnClient(os.Getenv("AMHELPER_APPLE"))
+	s := &server{wrapper: w, store: st, cdn: cdn, tracks: newLRU[cachedTrack](tracksKept), resolving: map[string]*resolveCall{},
+		aac: newLRU[aacSong](aacKept), aacOpened: map[string]*openedMedia{}, covers: newCovers(cfg.Covers),
+		uploads: newUploads(context.Background(), cfg.Uploads, cdn)}
 	for k, t := range st.tracks() {
 		s.tracks.put(k, t)
 	}
@@ -98,6 +103,8 @@ func main() {
 	mux.HandleFunc("POST "+prefix+"/aac/{id}", s.aacRegister)
 	mux.HandleFunc("GET "+prefix+"/aac/{file}", s.aacSongFile)
 	mux.HandleFunc("POST "+prefix+"/cover/{name}", s.cover)
+	mux.HandleFunc("POST "+prefix+"/upload/{id}", s.uploadRegister)
+	mux.HandleFunc("GET "+prefix+"/upload/{file}", s.uploadFile)
 	needsWrapper := func(h http.HandlerFunc) http.HandlerFunc {
 		return func(rw http.ResponseWriter, r *http.Request) {
 			if s.wrapper == nil {
@@ -126,6 +133,7 @@ type server struct {
 	store   *store
 	cdn     *http.Client
 	covers  *covers
+	uploads *uploads
 
 	mu        sync.Mutex
 	tracks    *lru[cachedTrack]

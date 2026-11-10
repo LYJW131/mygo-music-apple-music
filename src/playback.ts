@@ -10,7 +10,7 @@ import { losslessStream } from "./lossless.ts";
 import { needAccount } from "./session.ts";
 import type { LicenseBody, WebPlaybackBody } from "./types/apple.ts";
 import type { Stream } from "./types/music.ts";
-import { codeOf, fail, isCatalogID, sleep, t } from "./util.ts";
+import { codeOf, fail, isCatalogID, isLibrarySong, sleep, t } from "./util.ts";
 import { b64decode, b64encode, equal, hex } from "./widevine/bytes.ts";
 import { widevineChallenge } from "./widevine/cdm.ts";
 
@@ -38,6 +38,59 @@ async function webPlayback(id: string): Promise<string> {
   const playlist = song["hls-playlist-url"] || song.assets?.find((a) => a.flavor === "28:ctrp256")?.URL;
   if (!playlist) throw fail("unavailable", t("Apple Music has no AAC of this song"));
   return playlist;
+}
+
+// A song the listener uploaded is asked for by its library ID, as the web
+// player asks for it. Apple answers a link to the file as uploaded, or as
+// iTunes made it from theirs: AAC at 256 kbps in a plain .m4a, unencrypted.
+// The link lasts a day, so it isn't kept. From one connection it comes at
+// half the speed it plays at, so amhelper fetches it over several, and keeps
+// it (helper/upload.go). Without amhelper it doesn't play: ffmpeg would
+// fetch it over the one connection.
+
+/** The link Apple answers for the upload id, good for a day. */
+async function uploadLink(id: string): Promise<string> {
+  needAccount();
+  const body = await request<WebPlaybackBody>(PLAYBACK, {
+    method: "POST",
+    body: { universalLibraryId: id, isLibrary: true, language: "en-US" },
+    userHeader: "X-Apple-Music-User-Token",
+  });
+  if (body?.failureType) {
+    const code = String(body.failureType);
+    if (code === "2002") throw signInAgain();
+    const why = `${code}${body.customerMessage ? `: ${body.customerMessage}` : ""}`;
+    throw fail("unavailable", `${t("Apple Music won't play this song")} (${why})`);
+  }
+  // Only the unencrypted .m4a: a song bought or matched comes as an .m4p,
+  // whose key this doesn't ask for.
+  for (const song of body?.songList ?? []) {
+    for (const a of song.assets ?? []) {
+      if (a.metadata?.fileExtension === "m4a" && a.URL && /^https:\/\/[^/]+\.blobstore\.apple\.com\//.test(a.URL)) {
+        return a.URL;
+      }
+    }
+  }
+  throw fail("unavailable", t("Apple Music won't play this song"));
+}
+
+async function uploadStream(id: string): Promise<Stream> {
+  const url = await uploadLink(id);
+  let base: string;
+  try {
+    base = await helperBase();
+  } catch (e) {
+    if (codeOf(e)) throw e;
+    throw fail("unavailable", t("Songs you uploaded play only through amhelper, which this platform's plugin lacks"));
+  }
+  const res = await fetch(`${base}/upload/${id}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url }),
+  });
+  const body = (await res.json().catch(() => ({}))) as { size?: number; message?: string };
+  if (!res.ok) throw new Error(`amhelper: ${body.message ?? res.status}`);
+  return { url: `${base}/upload/${id}.m4a`, type: "m4a", quality: "high", bitRate: 256000, size: body.size };
 }
 
 function m3u8Attributes(line: string): Record<string, string> {
@@ -271,7 +324,9 @@ let wanted: string | null = null;
 export const wantedQuality = (): string => (wanted ??= host.storage.get<string>("quality") ?? "");
 
 export async function stream({ id, quality }: { id: string; quality?: string }): Promise<Stream> {
-  if (!isCatalogID(id)) throw fail("unavailable", t("Only songs in the Apple Music catalog play"));
+  // At every quality: there is no lossless of an upload to ask for.
+  if (isLibrarySong(id)) return uploadStream(id);
+  if (!isCatalogID(id)) throw fail("unavailable", t("Apple Music won't play this song"));
   if ((quality ?? "") !== wantedQuality()) host.storage.set("quality", (wanted = quality ?? ""));
   if (quality === "lossless") {
     const lossless = await losslessStream(id);

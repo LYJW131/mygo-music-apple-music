@@ -2,7 +2,8 @@
 // it takes the encryption off Apple's audio as it comes, the AAC with the key
 // the plugin got (playback.ts) and the ALAC with a wrapper's (lossless.ts),
 // and serves it on this machine as a fragmented MP4 the app plays itself. It
-// also keeps private playlists' covers (artwork.ts). The plugin's zip for a
+// also keeps private playlists' covers (artwork.ts), and fetches the songs
+// the listener uploaded (playback.ts). The plugin's zip for a
 // platform without it has none, and plays through ffmpeg instead.
 
 import { fail, t } from "./util.ts";
@@ -40,7 +41,12 @@ export async function helperBase(): Promise<string> {
 function running(): Promise<Helper> {
   // amhelper keeps key templates and the songs it worked out in cache, so
   // that a song played before plays at once after a restart.
-  const config = JSON.stringify({ ...settings(), cache: `${host.dataDir}/lossless`, covers: host.dataDir });
+  const config = JSON.stringify({
+    ...settings(),
+    cache: `${host.dataDir}/lossless`,
+    covers: host.dataDir,
+    uploads: `${host.dataDir}/uploads`,
+  });
   if (helper && helperConfig !== config) {
     void helper.then((h) => h.proc.kill()).catch(() => {});
     helper = null;

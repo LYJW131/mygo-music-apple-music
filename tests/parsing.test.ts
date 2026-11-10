@@ -71,8 +71,20 @@ test("songs: catalog IDs, library songs, what doesn't play", () => {
   assert.equal(library.album.id, "1783644603");
   assert.equal(library.artists?.[0].id, "name:MyGO!!!!!");
   assert.equal(library.unavailable, false);
-  const upload = toTrack({ id: "i.xyz", type: "library-songs", attributes: { name: "mine" } });
-  assert.equal(upload.unavailable, true);
+  // One they uploaded plays by its library ID; one the catalog no longer
+  // has comes without playParams, and doesn't.
+  const upload = toTrack({
+    id: "i.xyz",
+    type: "library-songs",
+    attributes: { name: "mine", playParams: { id: "i.xyz", kind: "song", isLibrary: true, reporting: false } },
+  });
+  assert.equal(upload.id, "i.xyz");
+  assert.equal(upload.unavailable, false);
+  const gone = toTrack({ id: "i.old", type: "library-songs", attributes: { name: "gone" } });
+  assert.equal(gone.unavailable, true);
+  // A catalog song not sold here comes with its catalog ID, and no playParams.
+  const elsewhere = toTrack({ id: "1783644604", type: "songs", attributes: { name: "elsewhere" } });
+  assert.equal(elsewhere.unavailable, true);
   assert.equal(songsOf([{ id: "1", type: "music-videos" }]).length, 0);
   assert.equal(
     toAlbum({ id: "l.abc", type: "library-albums", attributes: { playParams: { catalogId: 42 } } }).id,

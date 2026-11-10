@@ -8,7 +8,7 @@ import { prefetch, shown } from "./prefetch.ts";
 import { signedIn } from "./session.ts";
 import type { Resource } from "./types/apple.ts";
 import type { Album, Playlist, Track } from "./types/music.ts";
-import { codeOf, fail, isCatalogID } from "./util.ts";
+import { codeOf, fail, isCatalogID, isLibrarySong } from "./util.ts";
 
 /** How long what can't tell when it changed is kept: favorites, albums, stations. */
 export const LIST_KEPT = 10 * 60 * 1000;
@@ -194,7 +194,10 @@ export async function createPlaylist({ name }: { name: string }): Promise<Playli
 }
 
 export async function addToPlaylist({ id, trackIds }: { id: string; trackIds: string[] }): Promise<void> {
-  const data = trackIds.filter(isCatalogID).map((song) => ({ id: song, type: "songs" }));
+  // An upload goes by its library ID, as Apple's API takes it.
+  const data = trackIds
+    .filter((song) => isCatalogID(song) || isLibrarySong(song))
+    .map((song) => ({ id: song, type: isCatalogID(song) ? "songs" : "library-songs" }));
   if (!data.length) return;
   await me(`/library/playlists/${id}/tracks`, null, { method: "POST", body: { data } });
   forget(`playlist:${id}`);

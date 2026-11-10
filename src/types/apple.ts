@@ -13,6 +13,8 @@ export interface PlayParams {
   reportingId?: string;
   globalId?: string;
   isLibrary?: boolean;
+  /** false for a song the listener uploaded, whose plays Apple isn't told of. */
+  reporting?: boolean;
 }
 
 export interface Attributes {
@@ -88,7 +90,7 @@ export interface WebPlaybackBody {
   customerMessage?: string;
   songList?: {
     "hls-playlist-url"?: string;
-    assets?: { flavor?: string; URL?: string }[];
+    assets?: { flavor?: string; URL?: string; metadata?: { fileExtension?: string } }[];
   }[];
 }
 

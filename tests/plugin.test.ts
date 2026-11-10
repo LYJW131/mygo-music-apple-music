@@ -53,8 +53,13 @@ test("signed out, the library asks to sign in, before asking Apple", async () =>
   }
   assert.equal((await api.stations()).length, 0);
   assert.equal(await api.lyrics({ id: "1783644604" }), null);
+  // A song they uploaded is theirs too; what's neither doesn't play.
   await assert.rejects(
     () => api.stream({ id: "i.abc" }),
+    (e: { code?: string }) => e.code === "signIn",
+  );
+  await assert.rejects(
+    () => api.stream({ id: "ra.abc" }),
     (e: { code?: string }) => e.code === "unavailable",
   );
 });
@@ -111,7 +116,7 @@ test("a token signed in with another way stays when the setting is emptied", asy
 
 test("speaks the listener's language", async () => {
   const { api } = await load({ language: "zh-CN" });
-  await assert.rejects(() => api.stream({ id: "i.abc" }), /只能播放 Apple Music 曲库里的歌曲/);
+  await assert.rejects(() => api.stream({ id: "ra.abc" }), /Apple Music 无法播放这首歌/);
 });
 
 test("plugin.json and the locales ship, and every text and setting has its Chinese", async () => {

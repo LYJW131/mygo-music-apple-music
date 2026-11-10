@@ -94,6 +94,8 @@ export interface Stream {
   type: string;
   quality?: string;
   bitRate?: number;
+  /** In bytes, where it's known. */
+  size?: number;
 }
 
 export interface LyricWord {

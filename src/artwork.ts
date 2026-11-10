@@ -1,5 +1,5 @@
-// Covers. Apple's catalog ones are templates the app sizes; a private
-// playlist's is kept on this machine (see playlistArt).
+// Covers. Apple's catalog ones are templates the app sizes; those the
+// listener uploaded are kept on this machine (see keptArt).
 
 import { helperBase, helperMissing } from "./amhelper.ts";
 import { UA } from "./constants.ts";
@@ -17,10 +17,11 @@ export function art(artwork: Artwork | undefined): string | undefined {
     .replace("{f}", "jpg");
 }
 
-// A cover the listener chose for their own playlist is a presigned link to
-// Apple's blobstore, at the size they uploaded it and no other. From some
-// places it takes 20 to 35 seconds, past the 30 the app waits for a cover,
-// so the bigger ones never show. amhelper (or ffmpeg, where the plugin's zip
+// A cover the listener chose for their own playlist, or that came with songs
+// they uploaded, is a presigned link to Apple's blobstore, at the size they
+// uploaded it and no other. From some places it takes 20 to 35 seconds, past
+// the 30 the app waits for a cover, so the bigger ones never show. Each
+// uploaded song has a picture of its own, too. amhelper (or ffmpeg, where the plugin's zip
 // has no amhelper) fetches each once, with no deadline, and keeps it 600
 // pixels wide in the plugin's data; from then on the app reads it from there.
 // Until then the cover is left out: given the link, the app would spend one
@@ -33,8 +34,8 @@ const COVER_FETCHES = 4;
 const queue: { name: string; url: string }[] = [];
 let fetching = 0;
 
-/** A library playlist's cover. */
-export function playlistArt(artwork: Artwork | undefined): string | undefined {
+/** A cover of the library, which may be the listener's own. */
+export function keptArt(artwork: Artwork | undefined): string | undefined {
   const url = artwork?.url;
   if (!url || !/^https:\/\/[^/]+\.blobstore\.apple\.com\//.test(url)) return art(artwork);
   const name = coverName(url);

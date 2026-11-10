@@ -16,6 +16,8 @@ export const LIST_KEPT = 10 * 60 * 1000;
 // The listener's playlists as last listed, each with when it last changed,
 // which tells whether a playlist fetched before is still as it was.
 const changed = new Map<string, string>();
+// The listener's playlists' catalog IDs, which those they shared or saved have.
+const catalogIDs = new Map<string, string>();
 // Favorite Songs: the playlist Apple keeps of the songs they favorite,
 // which can't be deleted and isn't in the catalog. null when there's none.
 let favoritesID: string | null | undefined;
@@ -24,6 +26,7 @@ let favoritesID: string | null | undefined;
 export function forgetLibrary(): void {
   forgetAll();
   changed.clear();
+  catalogIDs.clear();
   edits.clear();
   favoritesID = undefined;
 }
@@ -41,6 +44,7 @@ export function libraryPlaylists(ahead = false): Promise<Resource[]> {
       for (const p of lists) {
         const a = p.attributes ?? {};
         if (a.lastModifiedDate) changed.set(p.id, a.lastModifiedDate);
+        if (a.playParams?.globalId) catalogIDs.set(p.id, a.playParams.globalId);
         if (a.canDelete === false && !a.hasCatalog) favoritesID = p.id;
       }
       return lists;
@@ -48,6 +52,9 @@ export function libraryPlaylists(ahead = false): Promise<Resource[]> {
     ahead,
   );
 }
+
+/** A library playlist's catalog ID, if it has one and the list of them said so. */
+export const playlistCatalogID = (id: string): string | undefined => catalogIDs.get(id);
 
 /** How a library playlist fetched before stays good: as long as it hasn't changed. */
 export function playlistFreshness(id: string) {

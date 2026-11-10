@@ -5,19 +5,23 @@
 
 import { allPages, catalog, first, me, storefront } from "./api.ts";
 import { kept } from "./background.ts";
-import { edited, inLibrary, playlistFreshness } from "./library.ts";
+import { edited, inLibrary, playlistCatalogID, playlistFreshness } from "./library.ts";
 import { artistOfParts, songsOf, toAlbum, toArtist, toPlaylist } from "./models.ts";
 import { prefetch, warm } from "./prefetch.ts";
 import type { Resource } from "./types/apple.ts";
 import type { AlbumPage, ArtistPage, Playlist } from "./types/music.ts";
 import { codeOf, fail, t } from "./util.ts";
 
+// MusicKit's container types, which plays from these pages are reported with (activity.ts).
+const PLAYLIST = 2;
+const ALBUM = 3;
+
 export async function album({ id }: { id: string }): Promise<AlbumPage> {
   warm();
   if (id.startsWith("l.")) {
     const item = first(await me(`/library/albums/${id}`, { include: "tracks" }));
     const songs = songsOf(await allPages(`/v1/me/library/albums/${id}/tracks`, { limit: 100 }));
-    prefetch(songs);
+    prefetch(songs, undefined, { type: ALBUM, ids: { "cloud-album-id": id } });
     return { album: { ...toAlbum(item), id, saved: true }, tracks: songs };
   }
   const [body, own] = await Promise.all([
@@ -30,7 +34,7 @@ export async function album({ id }: { id: string }): Promise<AlbumPage> {
     tracks = await allPages(`/v1/catalog/${await storefront()}/albums/${id}/tracks`, { limit: 300 });
   }
   const songs = songsOf(tracks);
-  prefetch(songs);
+  prefetch(songs, undefined, { type: ALBUM, ids: { "album-adam-id": id }, feature: "new / album_detail" });
   return { album: { ...toAlbum(item), saved: !!own }, tracks: songs };
 }
 
@@ -108,7 +112,11 @@ export async function playlist({ id }: { id: string }): Promise<Playlist> {
       const tracks = songsOf(e.tracks);
       found = { ...found, tracks, trackCount: tracks.length };
     }
-    prefetch(found.tracks ?? []);
+    const global = playlistCatalogID(id);
+    prefetch(found.tracks ?? [], undefined, {
+      type: PLAYLIST,
+      ids: global ? { "global-playlist-id": global, "universal-library-id": id } : { "universal-library-id": id },
+    });
     return found;
   }
   const [body, own] = await Promise.all([
@@ -128,6 +136,11 @@ export async function playlist({ id }: { id: string }): Promise<Playlist> {
     tracks = await allPages(`/v1/catalog/${await storefront()}/playlists/${id}/tracks`, { limit: 300 }, 5000);
   }
   const songs = songsOf(tracks);
-  prefetch(songs);
+  const version = item.attributes?.playParams?.versionHash;
+  prefetch(songs, undefined, {
+    type: PLAYLIST,
+    ids: version ? { "global-playlist-id": id, "playlist-version-hash": version } : { "global-playlist-id": id },
+    feature: "new / playlist_detail",
+  });
   return { ...toPlaylist(item), saved: !!own, trackCount: songs.length, tracks: songs };
 }

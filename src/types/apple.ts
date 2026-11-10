@@ -11,7 +11,10 @@ export interface PlayParams {
   kind?: string;
   catalogId?: string | number;
   reportingId?: string;
+  /** A library playlist's catalog ID, as catalogId is a library song's. */
   globalId?: string;
+  /** A catalog playlist's version. */
+  versionHash?: string;
   isLibrary?: boolean;
   /** false for a song the listener uploaded, whose plays Apple isn't told of. */
   reporting?: boolean;

@@ -7,6 +7,10 @@
 // renamed, the third moved to first, one taken out, each read back from Apple
 // itself, past what the plugin answers of its own changes. Whatever happens,
 // it's deleted at the end.
+//
+// Then two songs of an album, opened as the app opens it, are reported as
+// played, and the album shows first in Recently Played. Plays reported can't
+// be taken back: they stay in the test account's history.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
@@ -36,6 +40,8 @@ const lib = await import("../src/library.ts");
 const { playlist } = await import("../src/pages.ts");
 const { search } = await import("../src/search.ts");
 const { songID } = await import("../src/models.ts");
+const { album } = await import("../src/pages.ts");
+const { played } = await import("../src/activity.ts");
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /** Asks Apple every 10 s, for up to 3 minutes, until ok says it has caught up. */
@@ -105,4 +111,17 @@ try {
     );
   }
 }
+
+// Plays, from an album that isn't first in Recently Played already.
+const recentFirst = async () => (await me("/recent/played", { limit: 10 }))?.data?.[0]?.id;
+const before = await recentFirst();
+const albums = await search({ query: "taylor swift", kind: "albums", offset: 0 });
+const from = albums.albums!.find((a) => a.id !== before && /^\d+$/.test(a.id))!;
+const page = await album({ id: from.id });
+const [one, two] = page.tracks.filter((x) => !x.unavailable);
+console.log("album", from.id, "songs", one.id, two.id, "Recently Played first before:", before ?? "none");
+await played({ id: one.id });
+await sleep(5000);
+await played({ id: two.id });
+await waitFor("the album first in Recently Played", async () => (await recentFirst()) === from.id);
 process.exit(0);

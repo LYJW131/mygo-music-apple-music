@@ -138,3 +138,37 @@ test("plays close together each end the one just before them, in the order they 
     ["end 1783644617", "start 1001", "end 1001", "start 1783644617", "end 1783644617", "start 1880587625"],
   );
 });
+
+test("a song on an album or playlist page opened is reported as played from it, and a change of it so", async () => {
+  const { listed } = await import("../src/prefetch.ts");
+  const song = (id: string) => ({ id, name: id, album: { id: "", name: "" }, duration: 1000 });
+  listed([song("11"), song("12")], undefined, {
+    type: 3,
+    ids: { "album-adam-id": "10" },
+    feature: "new / album_detail",
+  });
+  listed([song("21"), song("12")], undefined, { type: 2, ids: { "universal-library-id": "p.x" } });
+  await played({ id: "11" });
+  await played({ id: "12" });
+  await played({ id: "11" });
+  await played({ id: "1880587625" });
+  const sent = events();
+  const start11 = sent.find((e) => e["event-type"] === 1 && e.ids["subscription-adam-id"] === "11")!;
+  assert.equal(start11["container-type"], 3);
+  assert.deepEqual(start11["container-ids"], { "album-adam-id": "10" });
+  assert.equal(start11["feature-name"], "new / album_detail");
+  assert.equal(start11["event-reason-hint-type"], 1);
+  // 12 is on both pages: the playlist's, opened last, is where it's played from.
+  const [, , end11, start12, end12, again11, end11b, none] = sent;
+  assert.equal(end11["end-reason-type"], 5, "the next is played from another container");
+  assert.deepEqual(start12["container-ids"], { "universal-library-id": "p.x" });
+  assert.equal(start12["container-type"], 2);
+  assert.equal(start12["feature-name"], "music_kit-integration");
+  assert.deepEqual(end12["container-ids"], { "universal-library-id": "p.x" }, "an end is of where it played from");
+  assert.equal(again11["event-reason-hint-type"], 1);
+  // A song on no page opened says no container, and the end before it is a skip.
+  assert.equal(end11b["end-reason-type"], 2);
+  assert.equal(none["container-type"], 0);
+  assert.equal("container-ids" in none, false);
+  assert.equal(none["event-reason-hint-type"], 0);
+});

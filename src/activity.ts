@@ -2,7 +2,11 @@
 // so what's played here shows in Recently Played and counts toward Replay and
 // recommendations. Its MusicKit posts each event to Apple's activity service
 // as it happens, one to a request and in order, with the fields its web app
-// gives one and no others. MyGo only says when a song starts, so a song's end
+// gives one and no others, among them the album or playlist the song is
+// played from: that is what Recently Played lists. MyGo doesn't say where a
+// song is played from, so it's guessed: the album or playlist of the page last
+// opened that has the song (prefetch.ts), or none. MyGo only says when a song
+// starts, so a song's end
 // goes just before the next one's start, timed by the clock: a pause counts as
 // playing, up to the song's length. Pauses, seeking and the app quitting
 // aren't said, and aren't reported. The listener stops it with "off" in the
@@ -10,6 +14,7 @@
 
 import { catalog, first, request, storefront } from "./api.ts";
 import { UA } from "./constants.ts";
+import { originOf, type Origin } from "./prefetch.ts";
 import { developerToken, signedIn, userToken } from "./session.ts";
 import { isCatalogID } from "./util.ts";
 
@@ -19,12 +24,15 @@ const ACTIVITY = "https://universal-activity-service.itunes.apple.com/play";
 const PLAY_END = 0;
 const PLAY_START = 1;
 const TRACK_SKIPPED_FORWARDS = 2;
+const CHANGED_ITEM = 5;
 const NATURAL_END_OF_TRACK = 7;
 const ITUNES_STORE_CONTENT = 1;
 // What the web player says it is, among MusicKit's source types.
 const WEB_APP = 16;
-// What a start says of why it began: none known.
+// What a start says of why it began: its container isn't the one played
+// before, or nothing is known.
 const HINT_NOT_SPECIFIED = 0;
+const HINT_CONTAINER_CHANGED = 1;
 // What MusicKit names where a song was started when it has no container.
 const DEFAULT_FEATURE = "music_kit-integration";
 // The web player's version, as its script said on 2026-11-10, and the
@@ -56,6 +64,7 @@ function persistentID(): string {
 interface Playing {
   id: string;
   started: number;
+  origin?: Origin;
 }
 
 /** An event to send, with what was true as it happened. */
@@ -64,8 +73,13 @@ interface PlayEvent {
   song: string;
   /** When it happened, as Date.now(). */
   at: number;
+  origin?: Origin;
   /** For an end: how long the song played, by the clock. */
   played?: number;
+  /** For an end: the next song is played from another container. */
+  changed?: boolean;
+  /** For a start. */
+  hint?: number;
 }
 
 let playing: Playing | null = null;
@@ -96,8 +110,8 @@ async function body(e: PlayEvent): Promise<Record<string, unknown>> {
     "event-type": e.type,
     type: ITUNES_STORE_CONTENT,
     "media-type": 0,
-    "container-type": 0,
-    "feature-name": DEFAULT_FEATURE,
+    "container-type": e.origin?.type ?? 0,
+    "feature-name": e.origin?.feature ?? DEFAULT_FEATURE,
     ids: { "subscription-adam-id": e.song },
     "media-duration-in-milliseconds": duration,
     "persistent-id": persistentID(),
@@ -112,14 +126,15 @@ async function body(e: PlayEvent): Promise<Record<string, unknown>> {
     "utc-offset-in-seconds": -new Date().getTimezoneOffset() * 60,
     "start-position-in-milliseconds": 0,
   };
+  if (e.origin) out["container-ids"] = e.origin.ids;
   if (e.type === PLAY_START) {
-    out["event-reason-hint-type"] = HINT_NOT_SPECIFIED;
+    out["event-reason-hint-type"] = e.hint ?? HINT_NOT_SPECIFIED;
   } else {
     // MusicKit's positions are in whole seconds, but for a song played out.
     const played = e.played ?? 0;
     const whole = duration > 0 && played >= duration - 2000;
     out["end-position-in-milliseconds"] = whole ? duration : Math.floor(played / 1000) * 1000;
-    out["end-reason-type"] = whole ? NATURAL_END_OF_TRACK : TRACK_SKIPPED_FORWARDS;
+    out["end-reason-type"] = whole ? NATURAL_END_OF_TRACK : e.changed ? CHANGED_ITEM : TRACK_SKIPPED_FORWARDS;
   }
   // How long ago it happened, which it was a moment ago when MusicKit sends it.
   out["milliseconds-since-play"] = Math.max(Date.now() - e.at, 0);
@@ -145,6 +160,9 @@ function drain(): Promise<void> {
   return sending;
 }
 
+const sameOrigin = (a: Origin | undefined, b: Origin | undefined): boolean =>
+  JSON.stringify(a?.ids ?? null) === JSON.stringify(b?.ids ?? null);
+
 /** MyGo's word that a song started playing. Answers once what it said is sent. */
 export async function played({ id }: { id: string }): Promise<void> {
   const now = Date.now();
@@ -152,11 +170,24 @@ export async function played({ id }: { id: string }): Promise<void> {
   // come close together each end the one just before them.
   const before = playing;
   const on = signedIn() && reporting();
-  const song = on && isCatalogID(id) ? { id, started: now } : null;
+  const song = on && isCatalogID(id) ? { id, started: now, origin: originOf(id) } : null;
   playing = song;
   if (!on) return;
-  if (before) outbox.push({ type: PLAY_END, song: before.id, at: now, played: now - before.started });
-  if (song) outbox.push({ type: PLAY_START, song: id, at: now });
+  const changed = !!song?.origin && !sameOrigin(song.origin, before?.origin);
+  if (before) {
+    outbox.push({
+      type: PLAY_END,
+      song: before.id,
+      at: now,
+      origin: before.origin,
+      played: now - before.started,
+      changed,
+    });
+  }
+  if (song) {
+    const hint = changed ? HINT_CONTAINER_CHANGED : HINT_NOT_SPECIFIED;
+    outbox.push({ type: PLAY_START, song: id, at: now, origin: song.origin, hint });
+  }
   // A drain under way sends these too, after what came before them.
   while (sending) await sending;
   if (outbox.length) await drain();

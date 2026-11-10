@@ -62,4 +62,26 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
-        run: gh release create "$TAG" dist/release/*.zip dist/release/*.sha256 --verify-tag --generate-notes --title "$TAG"
+        # GitHub's notes list the pull requests merged since the last release.
+        # A release of commits pushed straight to main has none, and said
+        # nothing of what changed: its notes are then those commits, each
+        # with what it says of itself.
+        run: |
+          prev=$(git describe --tags --abbrev=0 "$TAG^" 2>/dev/null || true)
+          gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" -f tag_name="$TAG" ${prev:+-f previous_tag_name="$prev"} -q .body > notes.md
+          if ! grep -q "^## What's Changed" notes.md; then
+            {
+              echo "## What's Changed"
+              echo
+              git log --no-merges --reverse --format=%H "${prev:+$prev..}$TAG" | while read -r commit; do
+                subject=$(git log -1 --format=%s "$commit")
+                [[ "$subject" == "chore(release)"* ]] && continue
+                echo "* $subject"
+                git log -1 --format=%b "$commit" | sed -E '/^(Co-Authored-By|Signed-off-by):/d' | sed 's/^/  /' | sed -e 's/[[:space:]]*$//' | cat -s
+              done
+              echo
+              cat notes.md
+            } > changed.md
+            mv changed.md notes.md
+          fi
+          gh release create "$TAG" dist/release/*.zip dist/release/*.sha256 --verify-tag --notes-file notes.md --title "$TAG"

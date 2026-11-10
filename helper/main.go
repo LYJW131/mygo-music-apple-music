@@ -10,7 +10,7 @@
 // none; it answers one line, {"port", "secret"}, and serves under /<secret>/
 // until its stdin closes:
 //
-//	POST /<secret>/aac/<id>            {media, key, seconds}: the song's AAC
+//	POST /<secret>/aac/<id>            {media, key, seconds}: the song's AAC, answering its loudness
 //	GET /<secret>/aac/<id>.m4a         that song, decrypted, as fragmented MP4
 //	POST /<secret>/cover/<name>        {url}: keeps a playlist cover in covers
 //	POST /<secret>/upload/<id>         {url}: an uploaded song's link, answering {size}
@@ -238,6 +238,7 @@ type timings struct {
 	M3U8   int64  `json:"m3u8,omitempty"`   // the wrapper's device playlist
 	Master int64  `json:"master,omitempty"` // the master playlist, from Apple
 	Media  int64  `json:"media,omitempty"`  // the variant's media playlist
+	Head   int64  `json:"head,omitempty"`   // its file's header, for its loudness
 	Keys   int64  `json:"keys,omitempty"`   // the key templates, at once
 	Source string `json:"source,omitempty"` // where the master came from: wrapper, catalog or cache
 }

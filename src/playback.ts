@@ -7,6 +7,7 @@ import { request } from "./api.ts";
 import { LICENSE, PLAYBACK, UA, WIDEVINE_SYSTEM } from "./constants.ts";
 import { ffmpeg } from "./ffmpeg.ts";
 import { losslessStream } from "./lossless.ts";
+import { soundCheck, type Loudness } from "./soundcheck.ts";
 import { needAccount } from "./session.ts";
 import type { LicenseBody, WebPlaybackBody } from "./types/apple.ts";
 import type { Stream } from "./types/music.ts";
@@ -247,7 +248,7 @@ export function resolve(id: string): Promise<Resolved> {
 // amhelper opens the file at Apple as it's handed over, and says so if Apple
 // has it no longer.
 
-async function viaHelper(base: string, id: string, song: Resolved): Promise<string> {
+async function viaHelper(base: string, id: string, song: Resolved): Promise<{ url: string; loudness?: Loudness }> {
   const res = await fetch(`${base}/aac/${id}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -258,8 +259,9 @@ async function viaHelper(base: string, id: string, song: Resolved): Promise<stri
     // Only Apple no longer having the file is worth asking for the song afresh.
     throw Object.assign(new Error(`amhelper: ${body.message ?? res.status}`), { stale: body.code === "media" });
   }
-  await res.body?.cancel();
-  return `${base}/aac/${id}.m4a`;
+  // How loud it is, from the file's header, which amhelper read as it opened it.
+  const body = (await res.json().catch(() => ({}))) as { loudness?: Loudness };
+  return { url: `${base}/aac/${id}.m4a`, loudness: body.loudness };
 }
 
 // Where the plugin's zip has no amhelper, ffmpeg takes the encryption off,
@@ -357,6 +359,9 @@ async function play(id: string, song: Resolved): Promise<Stream> {
         console.log(`Apple Music: playing through ffmpeg, as amhelper didn't start: ${(e as Error).message}`);
     }
   }
-  if (base) return { url: await viaHelper(base, id, song), type: "m4a", quality: "high", bitRate: 256000 };
+  if (base) {
+    const { url, loudness } = await viaHelper(base, id, song);
+    return { url, type: "m4a", quality: "high", bitRate: 256000, ...soundCheck(loudness) };
+  }
   return { url: await serve(song.media, song.key), type: "aac", quality: "high", bitRate: 256000 };
 }

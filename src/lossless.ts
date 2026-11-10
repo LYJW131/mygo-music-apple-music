@@ -8,6 +8,7 @@
 
 import { hasWrapper, helperBase, helperMissing, warmHelper } from "./amhelper.ts";
 import { catalog, first, query } from "./api.ts";
+import { soundCheck, type Loudness } from "./soundcheck.ts";
 import type { Attributes } from "./types/apple.ts";
 import type { Stream } from "./types/music.ts";
 
@@ -82,6 +83,8 @@ function playlistQuery(a: Audio | null): string {
 // how it was found, or null when it has no ALAC.
 interface Known extends Quality {
   query: string;
+  /** What the file's header says, for Sound Check; songs kept from before it was read lack it. */
+  loudness?: Loudness;
 }
 const known = new Map<string, Known | null>();
 // known is kept in host.storage ("lossless") for a week, as amhelper keeps
@@ -133,7 +136,10 @@ export const preparedOrPreparing = (id: string): boolean => {
  */
 export function prepare(id: string, ahead = false): Promise<Known | null> {
   loadKnown();
-  if (known.has(id)) return Promise.resolve(known.get(id) ?? null);
+  // One kept from before its loudness was read is asked about again, for it:
+  // amhelper has its keys, and reads its playlists and its file's header.
+  const was = known.get(id);
+  if (known.has(id) && (was === null || was?.loudness)) return Promise.resolve(was ?? null);
   const current = preparing.get(id);
   if (current && (ahead || !current.ahead)) return current.job;
   const job = (async () => {
@@ -144,13 +150,20 @@ export function prepare(id: string, ahead = false): Promise<Known | null> {
     }
     const q = playlistQuery(a);
     const res = await fetch(`${base}/prepare/${id}${q}${ahead ? (q ? "&" : "?") + "ahead=1" : ""}`);
-    const body = (await res.json()) as Quality & { code?: string; message?: string };
+    const body = (await res.json()) as Quality & { loudness?: Loudness; code?: string; message?: string };
     if (res.status === 404 && body.code === "noALAC") {
       remember(id, null);
       return null;
     }
     if (!res.ok) throw new Error(`amhelper: ${body.message ?? res.status}`);
-    const found = { sampleRate: body.sampleRate, bitDepth: body.bitDepth, bandwidth: body.bandwidth, query: q };
+    const found: Known = {
+      sampleRate: body.sampleRate,
+      bitDepth: body.bitDepth,
+      bandwidth: body.bandwidth,
+      query: q,
+      // A file whose header didn't come plays unevened, and is asked about again next time.
+      loudness: body.loudness,
+    };
     remember(id, found);
     return found;
   })();
@@ -237,5 +250,11 @@ export async function losslessStream(id: string): Promise<Stream | null> {
   }
   if (!q) return null;
   const base = await helperBase();
-  return { url: `${base}/song/${id}.m4a${q.query}`, type: "m4a", quality: "lossless", bitRate: q.bandwidth };
+  return {
+    url: `${base}/song/${id}.m4a${q.query}`,
+    type: "m4a",
+    quality: "lossless",
+    bitRate: q.bandwidth,
+    ...soundCheck(q.loudness),
+  };
 }

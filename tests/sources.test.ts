@@ -131,7 +131,9 @@ globalThis.fetch = async (input: string | URL | Request) => {
   const u = new URL(url);
   if (u.hostname === "127.0.0.1") {
     if (u.pathname.includes("/prepare/")) workedOut.add(u.pathname.split("/").pop()!);
-    if (u.pathname.includes("/prepare/")) return Response.json({ sampleRate: 44100, bitDepth: 16, bandwidth: 1000000 });
+    if (u.pathname.includes("/prepare/")) {
+      return Response.json({ sampleRate: 44100, bitDepth: 16, bandwidth: 1000000, loudness: {} });
+    }
     if (u.pathname.endsWith("/wake")) return Response.json({ woke: true });
     if (u.pathname.includes("/find/")) return Response.json({});
   }

@@ -90,21 +90,68 @@ from it, decrypts the song on this machine as it downloads, and hands it to MyGo
 
 ## Compared with Ringo
 
-Ringo is another project by the same author: this plugin's Apple Music code ported to Go and built into a standalone
-Apple Music client forked from MyGo Music, not public yet. Both ask Apple for the same things; the difference is that
-the plugin can only hand MyGo Music data through its plugin interface, while Ringo can change the app itself.
+Ringo is another project by the same author, not public yet: a standalone Apple Music client forked from MyGo Music,
+with this plugin's Apple Music code rewritten in Go and built into it.
 
-| Area              | MyGo Music + this plugin                                                                                                                                                                          | Ringo                                                                                                                                    |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Playing           | 256 kbps AAC; Lossless and Hi-Res Lossless with a wrapper; songs you uploaded                                                                                                                     | The same, and Autoplay (similar songs once the queue ends)                                                                               |
-| Quality           | One Lossless level, which takes the best ALAC there is; no High Efficiency (HE-AAC) or Dolby Atmos                                                                                                | High Efficiency, High Quality, Lossless and Hi-Res Lossless apart; Dolby Atmos for headphones or speakers; the quality in the player bar |
-| Even Out Loudness | Yes: by the loudness Apple measured of each song, at about -16 LKFS with MyGo Music's **Even Out Loudness** on                                                                                    | Yes                                                                                                                                      |
-| Listening history | Reported as each song starts, with the web player's fields; the album or playlist guessed from the page last opened; pauses, seeking and endings not reported, the song before timed by the clock | Starts, pauses, resumes, seeking, endings and quitting reported at the real position, with where each song plays from                    |
-| Pages             | Home, charts, albums, artists, playlists, stations, search, laid out by MyGo Music by what they hold                                                                                              | Also 3:4 cards and large pictures, motion artwork, an album's sections below it, record label pages, library artist pages                |
-| Library           | Favorite Songs, albums, playlists, recently added; creating, renaming and deleting playlists, adding, removing and reordering their songs; adding to the library and removing from it             | The same, and whether each song is in the library, adding to the library before favoriting, sorting and finding albums and songs         |
-| Accounts          | One at a time; an account the wrapper holds can be used, switched by its Apple ID in the settings                                                                                                 | Several, switched between with a click, those the wrapper holds listed by themselves                                                     |
-| Lyrics            | Word by word, with translations                                                                                                                                                                   | The same, and lyrics without any timing readable from the top                                                                            |
-| Interface         | MyGo Music's own                                                                                                                                                                                  | Sidebar, settings, album and artist pages laid out as Apple Music's, with Apple Music's words, gestures and scroll bars                  |
+Both ask Apple for the same things. They differ in one way: the plugin can only hand MyGo Music data through its plugin
+interface, while Ringo can change the app itself.
+
+Each row below is one feature. ✅ is there, ❌ isn't, and "Partly" says what's short. The last column is why the
+plugin lacks it, by the name of the entry under [What the plugin can't do](#limits).
+
+**Playing and quality**
+
+| Feature                                       | MyGo Music + this plugin                      | Ringo         | Why the plugin lacks it |
+| --------------------------------------------- | --------------------------------------------- | ------------- | ----------------------- |
+| 256 kbps AAC                                  | ✅                                            | ✅            |                         |
+| Lossless and Hi-Res Lossless (with a wrapper) | Partly: one Lossless level, the best there is | ✅ two levels | Settings are text boxes |
+| High Efficiency (HE-AAC, 64 kbps)             | ❌                                            | ✅            | Audio formats           |
+| Dolby Atmos for headphones or speakers        | ❌                                            | ✅            | Settings are text boxes |
+| Songs you uploaded                            | ✅                                            | ✅            |                         |
+| Even Out Loudness                             | ✅                                            | ✅            |                         |
+| The quality playing, in the player bar        | ❌                                            | ✅            | Audio formats           |
+| Autoplay (similar songs once the queue ends)  | ❌                                            | ✅            | Autoplay                |
+
+**Listening history** (with Use Listening History on)
+
+| Feature                                      | MyGo Music + this plugin                  | Ringo                   | Why the plugin lacks it |
+| -------------------------------------------- | ----------------------------------------- | ----------------------- | ----------------------- |
+| A song starting                              | ✅                                        | ✅                      |                         |
+| Pausing, resuming, seeking, ending, quitting | ❌ the song before is timed by the clock  | ✅ at the real position | Playback events         |
+| The album or playlist a song plays from      | Partly: guessed from the page last opened | ✅                      | Playback events         |
+
+**Pages**
+
+| Feature                                                    | MyGo Music + this plugin | Ringo | Why the plugin lacks it    |
+| ---------------------------------------------------------- | ------------------------ | ----- | -------------------------- |
+| Home, charts, albums, artists, playlists, stations, search | ✅                       | ✅    |                            |
+| Layouts such as 3:4 cards and large pictures               | ❌                       | ✅    | Layouts and motion artwork |
+| Motion artwork                                             | ❌                       | ✅    | Layouts and motion artwork |
+| An album's sections below it, record label pages           | ❌                       | ✅    | Layouts and motion artwork |
+
+**Library**
+
+| Feature                                                       | MyGo Music + this plugin        | Ringo | Why the plugin lacks it               |
+| ------------------------------------------------------------- | ------------------------------- | ----- | ------------------------------------- |
+| Favorite Songs, albums, playlists, recently added             | ✅                              | ✅    |                                       |
+| Creating, renaming and deleting playlists                     | ✅                              | ✅    |                                       |
+| Adding songs to a playlist, removing and reordering them      | ✅                              | ✅    |                                       |
+| Adding albums and playlists to the library, and removing them | ✅                              | ✅    |                                       |
+| Adding one song to the library                                | Partly: added as it's favorited | ✅    | What's in the library                 |
+| Whether each song is in the library                           | ❌                              | ✅    | What's in the library                 |
+| Sorting and finding albums and songs                          | ❌                              | ✅    | It hands over data, and draws nothing |
+
+**Accounts, lyrics, interface**
+
+| Feature                                                                 | MyGo Music + this plugin                                             | Ringo                                   | Why the plugin lacks it               |
+| ----------------------------------------------------------------------- | -------------------------------------------------------------------- | --------------------------------------- | ------------------------------------- |
+| Signing in on the web, with a token, or as an account the wrapper holds | ✅                                                                   | ✅                                      |                                       |
+| Several accounts                                                        | Partly: one at a time, switched by an Apple ID typed in the settings | ✅ switched with a click                | Settings are text boxes               |
+| Lyrics word by word, translations                                       | ✅                                                                   | ✅                                      |                                       |
+| Lyrics without any timing                                               | Partly: shown, but staying on the last line                          | ✅ readable from the top                | Lyrics                                |
+| Interface and wording                                                   | MyGo Music's own                                                     | Laid out as Apple Music's, in its words | It hands over data, and draws nothing |
+
+<a id="limits"></a>
 
 ### What the plugin can't do
 
@@ -117,7 +164,7 @@ things the plugin left out, but things the interface doesn't give it yet:
   played afterwards from somewhere that doesn't say, such as a search or an artist's page, it's counted to that album
   or playlist.
 - **Layouts and motion artwork**: a page's sections have no layout of their own, MyGo Music lays them out by what they
-  hold; albums and playlists have no field for a video cover.
+  hold; albums and playlists have no field for a video cover, and an album has nowhere for sections besides its songs.
 - **What's in the library**: a song has no field saying whether it's in the library, and there's no call to add one
   song to it (only to save albums and playlists), so favoriting a song also adds it to the library.
 - **Settings are text boxes**: no switches, menus or lists, so choices such as quality levels, Dolby Atmos or several

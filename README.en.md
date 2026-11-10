@@ -49,12 +49,15 @@ the account's Apple ID in **Wrapper Account**. The plugin asks the wrapper for t
 - Home recommendations, recently played, stations, library albums, library playlists, recently added.
 - Adding songs to Favorite Songs.
 - Adding to the library and removing from it.
-- Creating playlists and adding songs to them.
+- Creating, renaming and deleting playlists, and adding, removing and reordering their songs.
+- Playing songs you uploaded to your library (through `amhelper`).
 - Full lyrics, word by word where Apple has them, with translations. The account shows your Apple Music name and
   picture.
 - Optional lossless, falling back to AAC when it isn't set up or a song can't be had.
-- Songs played in MyGo Music count toward your listening history as in Apple's own apps; type `off` in the plugin's
-  **Use Listening History** setting to stop it.
+- With MyGo Music's Settings > Playback > **Even Out Loudness** on, songs play as loud as each other, by the loudness
+  Apple measured of each.
+- Songs played in MyGo Music count toward your listening history as in Apple's own apps, and those played from an album
+  or playlist page show in Recently Played; type `off` in the plugin's **Use Listening History** setting to stop it.
 
 <a id="lossless"></a>
 
@@ -83,12 +86,114 @@ from it, decrypts the song on this machine as it downloads, and hands it to MyGo
 - A wrapper-manager holds up to 10 accounts and picks the one for the song's country or region.
 - Whoever reaches the wrapper's port can use your account: don't expose a wrapper to the internet without a key.
 
+<a id="ringo"></a>
+
+## Compared with Ringo
+
+[Ringo](https://github.com/LYJW131/ringo) is another project by the same author: a standalone Apple Music client
+forked from MyGo Music, with this plugin's Apple Music code rewritten in Go and built into it.
+
+Both ask Apple for the same things. They differ in one way: the plugin can only hand MyGo Music data through its plugin
+interface, while Ringo can change the app itself.
+
+Each row below is one feature. ✅ is there, ❌ isn't, and "Partly" says what's short. The last column is why the
+plugin lacks it, by the name of the entry under [What the plugin can't do](#limits).
+
+**Playing and quality**
+
+| Feature                                       | MyGo Music + this plugin                      | Ringo         | Why the plugin lacks it |
+| --------------------------------------------- | --------------------------------------------- | ------------- | ----------------------- |
+| 256 kbps AAC                                  | ✅                                            | ✅            |                         |
+| Lossless and Hi-Res Lossless (with a wrapper) | Partly: one Lossless level, the best there is | ✅ two levels | Settings are text boxes |
+| High Efficiency (HE-AAC, 64 kbps)             | ❌                                            | ✅            | Audio formats           |
+| Dolby Atmos for headphones or speakers        | ❌                                            | ✅            | Settings are text boxes |
+| Songs you uploaded                            | ✅                                            | ✅            |                         |
+| Even Out Loudness                             | ✅                                            | ✅            |                         |
+| The quality playing, in the player bar        | ❌                                            | ✅            | Audio formats           |
+| Autoplay (similar songs once the queue ends)  | ❌                                            | ✅            | Autoplay                |
+
+**Listening history** (with Use Listening History on)
+
+| Feature                                      | MyGo Music + this plugin                  | Ringo                   | Why the plugin lacks it |
+| -------------------------------------------- | ----------------------------------------- | ----------------------- | ----------------------- |
+| A song starting                              | ✅                                        | ✅                      |                         |
+| Pausing, resuming, seeking, ending, quitting | ❌ the song before is timed by the clock  | ✅ at the real position | Playback events         |
+| The album or playlist a song plays from      | Partly: guessed from the page last opened | ✅                      | Playback events         |
+
+**Pages**
+
+| Feature                                                    | MyGo Music + this plugin | Ringo | Why the plugin lacks it    |
+| ---------------------------------------------------------- | ------------------------ | ----- | -------------------------- |
+| Home, charts, albums, artists, playlists, stations, search | ✅                       | ✅    |                            |
+| Layouts such as 3:4 cards and large pictures               | ❌                       | ✅    | Layouts and motion artwork |
+| Motion artwork                                             | ❌                       | ✅    | Layouts and motion artwork |
+| An album's sections below it, record label pages           | ❌                       | ✅    | Layouts and motion artwork |
+
+**Library**
+
+| Feature                                                       | MyGo Music + this plugin        | Ringo | Why the plugin lacks it               |
+| ------------------------------------------------------------- | ------------------------------- | ----- | ------------------------------------- |
+| Favorite Songs, albums, playlists, recently added             | ✅                              | ✅    |                                       |
+| Creating, renaming and deleting playlists                     | ✅                              | ✅    |                                       |
+| Adding songs to a playlist, removing and reordering them      | ✅                              | ✅    |                                       |
+| Adding albums and playlists to the library, and removing them | ✅                              | ✅    |                                       |
+| Adding one song to the library                                | Partly: added as it's favorited | ✅    | What's in the library                 |
+| Whether each song is in the library                           | ❌                              | ✅    | What's in the library                 |
+| Sorting and finding albums and songs                          | ❌                              | ✅    | It hands over data, and draws nothing |
+
+**Accounts, lyrics, interface**
+
+| Feature                                                                 | MyGo Music + this plugin                                             | Ringo                                   | Why the plugin lacks it               |
+| ----------------------------------------------------------------------- | -------------------------------------------------------------------- | --------------------------------------- | ------------------------------------- |
+| Signing in on the web, with a token, or as an account the wrapper holds | ✅                                                                   | ✅                                      |                                       |
+| Several accounts                                                        | Partly: one at a time, switched by an Apple ID typed in the settings | ✅ switched with a click                | Settings are text boxes               |
+| Lyrics word by word, translations                                       | ✅                                                                   | ✅                                      |                                       |
+| Lyrics without any timing                                               | Partly: shown, but staying on the last line                          | ✅ readable from the top                | Lyrics                                |
+| Interface and wording                                                   | MyGo Music's own                                                     | Laid out as Apple Music's, in its words | It hands over data, and draws nothing |
+
+<a id="limits"></a>
+
+### What the plugin can't do
+
+MyGo Music is a player for many sources, and its plugin interface asks a source for songs, pages and audio. These aren't
+things the plugin left out, but things the interface doesn't give it yet:
+
+- **Playback events**: MyGo Music calls `played` once, as a song starts, with its ID only: it doesn't say when a song
+  is paused, sought in, played out or quit, nor which album or playlist it's played from. The plugin times the song
+  before by the clock, and takes the album or playlist page last opened that has the song as where it's played from;
+  played afterwards from somewhere that doesn't say, such as a search or an artist's page, it's counted to that album
+  or playlist.
+- **Layouts and motion artwork**: a page's sections have no layout of their own, MyGo Music lays them out by what they
+  hold; albums and playlists have no field for a video cover, and an album has nowhere for sections besides its songs.
+- **What's in the library**: a song has no field saying whether it's in the library, and there's no call to add one
+  song to it (only to save albums and playlists), so favoriting a song also adds it to the library.
+- **Settings are text boxes**: no switches, menus or lists, so choices such as quality levels, Dolby Atmos or several
+  accounts would mean typing words, and the plugin leaves them out.
+- **Audio formats**: AAC is decoded as AAC-LC only, so Apple's High Efficiency (HE-AAC) can't play; a stream has no
+  sample rate or bit depth to say, and nowhere in the interface to show a quality.
+- **Lyrics**: of lyrics without any timing, MyGo Music drops LRC lines without a time, and lines all at 0 stay on the
+  last one.
+- **Autoplay**: once the queue ends, the app asks the plugin for nothing more (only stations do), so there's no
+  Autoplay.
+
+Others come from what a plugin is:
+
+- **It hands over data, and draws nothing**: how a page looks, where its buttons are and the words on them are MyGo
+  Music's; the plugin only names what it hands over, and is asked for a page only as it's opened.
+- **Where it runs**: in MyGo Music's JavaScript runtime, 30 seconds a call at most, in at most 256 MB, without Node's
+  APIs. Decrypting songs and fetching the ones you uploaded is done in `amhelper`, which comes with the plugin.
+- **The helper needs allowing**: `amhelper` is a program of its own, which you allow the plugin to start in its
+  settings. On a platform it doesn't come for, such as Windows on arm64, songs play through ffmpeg, songs you uploaded
+  don't play, loudness isn't evened out, and covers are kept through ffmpeg.
+
 ## Keeping up with MyGo Music
 
 When MyGo Music releases, an automated check looks at what the release means for this plugin: Claude reads the
 upstream changes, runs tests, and posts its verdict (nothing to do, optional, needed, or broken) on the
-[tracking issue](https://github.com/LYJW131/mygo-music-apple-music/issues/2). What needs changing is followed up in a
-new plugin release, which MyGo offers you as an update.
+[tracking issue](https://github.com/LYJW131/mygo-music-apple-music/issues/2). It also looks for anything in
+[What the plugin can't do](#limits) that the release's plugin interface now gives, and makes that feature, in a draft
+pull request apart from any fix, with this list changed to match. What needs changing is followed up in a new plugin
+release, which MyGo offers you as an update.
 
 ## Privacy
 
@@ -96,10 +201,11 @@ new plugin release, which MyGo offers you as an update.
   this machine only. One given in the settings is kept unencrypted in the plugin's settings too, and one from the
   wrapper, which `amhelper` fetches, in the plugin's data.
 - With **Use Listening History** on (the default), the plugin tells Apple
-  (`universal-activity-service.itunes.apple.com`) as each song starts which song it is, how long it is and how long
-  the one before played, as the web player at music.apple.com does.
+  (`universal-activity-service.itunes.apple.com`) as each song starts which song it is, how long it is, how long the
+  one before played and the album or playlist it's guessed to play from, as the web player at music.apple.com does.
 - The wrapper key is kept in the plugin's settings and only sent to the wrapper address set. `amhelper` listens on this
-  machine only, under a random path, and keeps the keys and songs it worked out in the plugin's data.
+  machine only, under a random path, and keeps the keys and songs it worked out in the plugin's data, and the last 20
+  songs you uploaded that played.
 
 ## License
 

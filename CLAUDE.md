@@ -20,6 +20,8 @@ npm run test:e2e     # plays AAC and ALAC through MyGo's own plugin host and pla
 npm run test:live    # signed out, real Apple API (not in CI)
 APPLE_MUSIC_TOKEN_FILE=… npm run test:signed-in   # signed in, plays one song through amhelper and ffmpeg (not in CI;
                                                   # npm run helper after its build, or it plays through ffmpeg twice)
+APPLE_MUSIC_WRITE_TOKEN_FILE=… npm run test:live-write   # changes an account kept for testing, and puts it back:
+                                                         # a playlist made, edited and deleted (not in CI)
 ```
 
 Node 22.18+ runs the `.ts` scripts and tests directly (type stripping); there is no tsx. Go (`helper/go.mod`) builds
@@ -40,21 +42,28 @@ and tests amhelper.
   `stations.ts`, `lyrics.ts` (TTML).
 - Playing: `playback.ts` (webPlayback → m3u8 → license; the song handed to amhelper as `POST aac/<id>` with its key
   and length, the segments' EXTINFs added up, and played from `aac/<id>.m4a`; ffmpeg `-listen` on 127.0.0.1 as ADTS
-  where there's no amhelper), `amhelper.ts` (starts it; config on stdin), `prefetch.ts` (warm
+  where there's no amhelper; a song the listener uploaded, `i.…`, by webPlayback's `universalLibraryId`, its
+  unencrypted .m4a handed to amhelper as `POST upload/<id>`, and none without amhelper), `amhelper.ts` (starts it; config on stdin), `prefetch.ts` (warm
   connections, resolve the first 3 songs of a page, ≤15/min; every list the app may play from is noted, home's only
   where no page opened has the song, and a song played lossless works out the 12 after it; a station's 10 are worked out
   as they come; `lyrics`, asked as every song starts, even one played from the app's cache, counts as playing, which
-  leaves the wrapper asleep), `ffmpeg.ts`, `artwork.ts` (private playlist covers are slow blobstore links, kept locally
-  by amhelper's `POST cover/<name>`, or ffmpeg).
+  leaves the wrapper asleep), `ffmpeg.ts`, `artwork.ts` (private playlist covers, and uploaded songs' and albums', are slow
+  blobstore links, kept locally by amhelper's `POST cover/<name>`, or ffmpeg).
 - Listening history: `activity.ts` answers `played`, which MyGo calls as a song starts, by posting a start to Apple's
-  play activity service as MusicKit JS does (`universal-activity-service.itunes.apple.com/play`), with the previous
-  song's end timed by the clock. Durations come from `toTrack`. The `listeningHistory` setting set to `off` stops it.
+  play activity service as the web player's MusicKit does (`universal-activity-service.itunes.apple.com/play`), one
+  event to a request, with the previous song's end timed by the clock. The container (album or playlist) is guessed:
+  the page last opened that has the song (`prefetch.ts` `originOf`), else none. Durations come from `toTrack`. The
+  `listeningHistory` setting set to `off` stops it.
 - Lossless: `lossless.ts` (through `amhelper.ts`, whose config on stdin is wrapper, key, cache dir and covers dir; it
   answers `{port, secret}`, and runs without a wrapper for AAC and covers) notes each catalog song's `audioTraits` and `extendedAssetUrls.enhancedHls`, and asks amhelper to `prepare` a song
   and serve `song/<id>.m4a`; `null` falls back to AAC. Following amdl, lossless songs use the catalog's master
   playlist and Hi-Res ones the wrapper's `/m3u8` first (the catalog's sometimes lacks 88.2–192 kHz).
+- Sound Check: `soundcheck.ts` turns the loudness amhelper reads from each file's header (`helper/loudness.go`, the
+  `tlou` box: LKFS and true peak) into the stream's `gain` and `peak` for MyGo's player (`10^((gain+4)/20)`, capped at
+  `1/peak`), bringing songs to -16 LKFS: `gain = -20 - LKFS`, the peak given only for a lift.
 - `helper/`: `main.go` routes, `aac.go` the AAC (CENC, AES-CTR with each sample's IV from `senc`, and an edit list that
-  skips the encoder's 2112 frames of priming), `cover.go` playlist covers (JPEG, shrunk to 600 wide), `account.go` an account's token (`/status`'s instances, then
+  skips the encoder's 2112 frames of priming), `cover.go` playlist covers (JPEG, shrunk to 600 wide), `upload.go` uploaded songs (6 connections
+  at once, the last 20 kept), `loudness.go` the `tlou` box, `account.go` an account's token (`/status`'s instances, then
   `/token?instance=`; neither waits behind songs), `wrapper.go` the
   wrapper client (one request at a time, `queue.go` puts played songs
   before ones prepared ahead), `hls.go` playlists, `mp4.go` decrypts Apple's 15 s fragments into ~1 s ones as they
@@ -66,18 +75,29 @@ and tests amhelper.
   app asks for anything and a second after. Answers are `kept`: a library playlist until its `lastModifiedDate`
   changes, the rest for 10 minutes; writes `forget` what they change. A function's second argument `ahead` marks a
   background call; the app only ever passes one.
+- Playlist edits (`library.ts`): renamed, deleted, songs taken out by their library IDs, a new order PUT whole. Apple
+  answers with the playlist as it was for a while after, its date too, so for 5 minutes the plugin answers with what
+  the listener made of it (`edited`).
 - Liked is Favorite Songs, the library playlist with `canDelete: false` and no catalog version, hidden from
   `playlists`; liking is a rating of 1.
 - Upstream watch: `.github/workflows/upstream.yml` runs `scripts/upstream-watch.ts` when MyGo releases. Claude Fable
   (Anthropic API through GitHub OIDC, no key) reads the diff against the plugin, runs what it can on the runner, and
   `scripts/upstream-watch/report.ts` turns its report into a comment by lyjw131[bot] on the open Automation issue.
-  Commands run under bubblewrap only to keep the job's OIDC request token from them. It runs Fable 5.2 in fast mode
-  (twice the price). Breakers: 30 minutes and $20 a run (then it is told to hand in; past 1.5 times either it stops),
-  and 3 automatic runs a day. When the report says the plugin needs a change, the same conversation makes it (20
-  minutes and $20 more, `npm run check` must pass, no `.github/`), and `scripts/upstream-watch/propose.ts` opens a
-  draft pull request of one commit, made through `createCommitOnBranch` so GitHub signs it as lyjw131[bot],
-  co-authored by the Claude models only. To run it locally, set `ANTHROPIC_BASE_URL` to the magpie gateway
-  (`http://127.0.0.1:3425`) and any `ANTHROPIC_API_KEY`.
+  Commands run under bubblewrap only to keep the job's OIDC request token from them. It runs Fable 5.2 at its standard
+  speed (`--speed fast` is its fast mode, at twice the price). When the report says the plugin needs a change, the same conversation makes it (`npm run check`
+  must pass, no `.github/`). The report also says which entries of README.md's list of what the plugin can't do
+  (`#limits`, with the comparison above it; `scripts/upstream-watch/limits.ts` cuts it out, and it is the only list)
+  the release lifts, by MyGo's files and symbols; one the model is sure of and can show working here is made next,
+  from the same plugin commit without the fix (`npm run check` and `scripts/e2e.ts` at `minAppVersion` and the release
+  must pass, and both READMEs' list and comparison change with it). Breakers (`scripts/upstream-watch/breakers.ts`):
+  the check 30 minutes and $10, the fix and the feature 20 minutes and $10 each (past them the model is told to hand
+  in; past 1.5 times the phase stops), so at worst 105 minutes and $45 a run, and 3 automatic runs a day.
+  `scripts/upstream-watch/propose.ts` opens a draft pull request of one commit for each, the fix on
+  `upstream/mygo-<tag>` and the feature (`feat`) on `upstream/mygo-<tag>-feature`, each naming the other, made through
+  `createCommitOnBranch` so GitHub signs it as lyjw131[bot], co-authored by the Claude models only. An open one for
+  the same release is reused; an open feature one marks the entries it lifts in its description, and later checks
+  don't make those again. `workflow_dispatch`'s `draft_pr` and `feature_pr` turn either off. To run it locally, set
+  `ANTHROPIC_BASE_URL` to the magpie gateway (`http://127.0.0.1:3425`) and any `ANTHROPIC_API_KEY`.
   `helper/cmd/fakeapple` stands in for a wrapper and Apple's CDN (Temari's published sample, looped, and the web
   player's CENC AAC, made from `testdata/tone.aac`), so amhelper runs end to end without an account; amhelper asks it
   for Apple's files when `AMHELPER_APPLE` is set.
@@ -100,7 +120,8 @@ The bundle runs in MyGo's moejs runtime, not Node:
 - `host.storage` keys: `mediaUserToken`, `givenToken` (the `mediaUserToken` setting last signed in with, for accounts
   the sign-in window can't sign in to), `storefront`, `profile` (name and picture, a day), `devToken`, `resolved` (song → media + key + seconds, ≤3000; ones kept without seconds have their playlist read again), `covers`,
   `quality` (the app's last asked), `wrapperAccount` (the wrapper and account named, the token it gave and when to ask
-  again), `lossless` (song → its ALAC or none, a week).
+  again), `lossless` (song → its ALAC and loudness, or none, a week;
+  one kept without loudness is prepared again).
 
 ## Conventions
 

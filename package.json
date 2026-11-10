@@ -15,6 +15,7 @@
     "test:live": "npm run build && node --experimental-vm-modules tests/live.ts",
     "test:e2e": "node scripts/e2e.ts",
     "test:signed-in": "npm run build && node --experimental-vm-modules tests/signed-in.ts",
+    "test:live-write": "node tests/live-write.ts",
     "check": "npm run typecheck && npm run format:check && npm test && npm run test:helper && npm run package"
   },
   "engines": {

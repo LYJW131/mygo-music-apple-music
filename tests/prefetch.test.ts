@@ -43,7 +43,9 @@ const asked: { url: string; at: number }[] = [];
 globalThis.fetch = async (input: string | URL | Request) => {
   const url = String(input instanceof Request ? input.url : input);
   asked.push({ url, at: Date.now() });
-  if (url.includes("/prepare/")) return Response.json({ sampleRate: 44100, bitDepth: 16, bandwidth: 1000000 });
+  if (url.includes("/prepare/")) {
+    return Response.json({ sampleRate: 44100, bitDepth: 16, bandwidth: 1000000, loudness: { lkfs: -8, peak: 0.98 } });
+  }
   if (url.includes("/wake")) return Response.json({ woke: true });
   if (url.includes("/find/")) return Response.json({});
   return new Response("not here", { status: 404 });
@@ -72,14 +74,14 @@ const lossless = (yes = true) => ({ audioTraits: yes ? ["lossless"] : [], extend
 // The listener chose Lossless before.
 storage.set("quality", "lossless");
 
-// An album the listener played before: every song is worked out, kept from then.
+// An album the listener played before: every song is worked out, kept from
+// then, with how loud it is; and one song kept from before that was read.
 const album = Array.from({ length: 20 }, (_, i) => String(1000 + i));
-storage.set(
-  "lossless",
-  Object.fromEntries(
-    album.map((id) => [id, { q: { sampleRate: 44100, bitDepth: 16, bandwidth: 1000000, query: "" }, at: Date.now() }]),
-  ),
-);
+const q = { sampleRate: 44100, bitDepth: 16, bandwidth: 1000000, query: "" };
+storage.set("lossless", {
+  ...Object.fromEntries(album.map((id) => [id, { q: { ...q, loudness: { lkfs: -20, peak: 0.5 } }, at: Date.now() }])),
+  "3000": { q, at: Date.now() },
+});
 for (const id of album) noteAudio(id, lossless() as never);
 
 test("browsing, the wrapper is woken ahead of the first song", async () => {
@@ -96,6 +98,9 @@ test("playing songs worked out before, the wrapper isn't asked anything for six 
   for (const id of album.slice(0, 2)) {
     const s = await api.stream({ id, quality: "lossless" });
     assert.equal(s.quality, "lossless");
+    // Quiet, it's lifted 4 dB to -16 LKFS: the player's own 4 dB, and no more.
+    assert.equal(s.gain, -0.01);
+    assert.equal(s.peak, 0.5);
     for (let i = 0; i < 6; i++) {
       await minutes(0.5);
       await api.stations({});
@@ -164,4 +169,15 @@ test("more than fifteen songs a minute wait for the minute to pass", async () =>
     if (i >= 15) assert.ok(x.at - ahead()[i - 15].at >= 60_000, `${x.id} too soon`);
   }
   assert.ok(ahead().every((x) => x.at - from < 2 * 60_000));
+});
+
+test("a song kept from before its loudness was read is asked about again, once, for Sound Check", async () => {
+  noteAudio("3000", lossless() as never);
+  asked.length = 0;
+  for (let i = 0; i < 2; i++) {
+    const s = await api.stream({ id: "3000", quality: "lossless" });
+    assert.equal(s.gain, -12, "-8 LKFS turned down 12 dB, to -16 with the player's 4");
+    assert.equal(s.peak, undefined, "a peak only holds back a lift");
+  }
+  assert.deepEqual(toWrapper(), ["http://127.0.0.1:1/s/prepare/3000"]);
 });

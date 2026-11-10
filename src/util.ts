@@ -23,3 +23,6 @@ export const t = (text: string): string => host.t(text);
 export const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const isCatalogID = (id: string): boolean => /^\d+$/.test(id);
+
+/** A song of the listener's library, by its library ID: one they uploaded plays by it. */
+export const isLibrarySong = (id: string): boolean => /^i\.[\w-]+$/.test(id);

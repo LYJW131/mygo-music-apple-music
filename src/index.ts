@@ -77,6 +77,10 @@ export const saveAlbum = asked(lib.saveAlbum);
 export const savePlaylist = asked(lib.savePlaylist);
 export const createPlaylist = asked(lib.createPlaylist);
 export const addToPlaylist = asked(lib.addToPlaylist);
+export const renamePlaylist = asked(lib.renamePlaylist);
+export const deletePlaylist = asked(lib.deletePlaylist);
+export const removeFromPlaylist = asked(lib.removeFromPlaylist);
+export const movePlaylistTrack = asked(lib.movePlaylistTrack);
 export const playlists = asked(async () => {
   const lists = await lib.playlists();
   // The app lists them as it comes to the front: what changed is fetched again.

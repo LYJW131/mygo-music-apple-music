@@ -58,12 +58,27 @@ const playlist = [
   "mzaf_1.rmhq.aac.wa.mp4",
 ].join("\n");
 
+const UPLOAD = "https://store-033.blobstore.apple.com/x/song.m4a?sig=2";
 const asked: { url: string; body?: unknown }[] = [];
 let helperAnswer = () => new Response('{"ok":true}');
 mock.method(globalThis, "fetch", async (input: string | URL, init?: RequestInit) => {
   const url = String(input);
   asked.push({ url, body: init?.body ? JSON.parse(String(init.body)) : undefined });
   if (url.startsWith("http://127.0.0.1:1/s/aac/")) return helperAnswer();
+  if (url === "http://127.0.0.1:1/s/upload/i.mine") return Response.json({ size: 4321 });
+  if (url.includes("webPlayback") && (JSON.parse(String(init?.body)) as { isLibrary?: boolean }).isLibrary) {
+    // An upload: the file as uploaded, and the one iTunes made of it, encrypted.
+    return Response.json({
+      songList: [
+        {
+          assets: [
+            { URL: "https://store-033.blobstore.apple.com/x/song.m4p?sig=1", metadata: { fileExtension: "m4p" } },
+            { URL: UPLOAD, metadata: { fileExtension: "m4a" } },
+          ],
+        },
+      ],
+    });
+  }
   if (url.includes("webPlayback")) {
     return Response.json({ songList: [{ assets: [{ flavor: "28:ctrp256", URL: PLAYLIST }] }] });
   }
@@ -126,4 +141,18 @@ test("a kept song whose file Apple no longer has is asked for afresh", async () 
   assert.ok(asked.some((a) => a.url.includes("webPlayback")));
   assert.equal((storage.get("resolved") as Record<string, unknown>)["103"], undefined);
   helperAnswer = () => new Response('{"ok":true}');
+});
+
+test("a song the listener uploaded is asked for by its library ID, and its unencrypted file handed to amhelper", async () => {
+  asked.length = 0;
+  const s = await stream({ id: "i.mine", quality: "lossless" });
+  assert.deepEqual(s, {
+    url: "http://127.0.0.1:1/s/upload/i.mine.m4a",
+    type: "m4a",
+    quality: "high",
+    bitRate: 256000,
+    size: 4321,
+  });
+  assert.deepEqual(asked[0].body, { universalLibraryId: "i.mine", isLibrary: true, language: "en-US" });
+  assert.deepEqual(asked[1], { url: "http://127.0.0.1:1/s/upload/i.mine", body: { url: UPLOAD } });
 });

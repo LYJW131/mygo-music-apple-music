@@ -42,8 +42,25 @@ export function wake(): void {
 const SOON = 3;
 const NEXT = 12;
 
-// The songs of the pages opened, in their order, by the songs on them.
-const lists = new Map<string, string[]>();
+/**
+ * Where a list of songs is played from, as MusicKit tells Apple: an album
+ * (3) or a playlist (2), its IDs, and the name of where in the web player
+ * it was started, which was only seen of its album and playlist pages.
+ */
+export interface Origin {
+  type: number;
+  ids: Record<string, string>;
+  feature?: string;
+}
+
+/** The songs of a page opened, in their order, and what the page is of. */
+interface List {
+  ids: string[];
+  origin?: Origin;
+}
+
+// The pages opened, by the songs on them.
+const lists = new Map<string, List>();
 const LISTED_MOST = 5000;
 
 // Lists the app goes on with as it asks for more: a station's next songs, a
@@ -64,15 +81,16 @@ const playable = (tracks: Track[]) => tracks.filter((x) => !x.unavailable && isC
 // Lists the app loaded by itself, as home: a song on a page the listener
 // opened stays on that one, which is more likely what they play it from.
 // Home's Recently Played has the album playing on it, by then.
-const aside = new WeakSet<string[]>();
+const aside = new WeakSet<List>();
 
-function note(all: string[], weakly = false): void {
-  if (weakly) aside.add(all);
+function note(all: string[], weakly = false, origin?: Origin): void {
+  const list: List = { ids: all, origin };
+  if (weakly) aside.add(list);
   for (const id of all) {
     const was = lists.get(id);
     if (weakly && was && !aside.has(was)) continue;
     lists.delete(id);
-    lists.set(id, all);
+    lists.set(id, list);
   }
   while (lists.size > LISTED_MOST) lists.delete(lists.keys().next().value!);
 }
@@ -92,10 +110,10 @@ export function shown(tracks: Track[]): void {
  * out the ones after it, but works none out now. Returns the songs that
  * play, the run's new ones for a run.
  */
-export function listed(tracks: Track[], run?: Run): string[] {
+export function listed(tracks: Track[], run?: Run, origin?: Origin): string[] {
   const ids = playable(tracks);
   if (!run) {
-    note(ids);
+    note(ids, false, origin);
     return ids;
   }
   const before = run.start ? [] : (runs.get(run.key) ?? []);
@@ -112,6 +130,15 @@ export function listed(tracks: Track[], run?: Run): string[] {
 // the audio only of a song it doesn't keep: a song played before plays from
 // its cache, and says it plays by its lyrics only.
 
+/**
+ * Where the song is most likely played from: the album or playlist of the
+ * page last opened that has it. MyGo doesn't say, so this is a guess, and it
+ * guesses wrong for a song played from a page of another kind opened since,
+ * such as a search or an artist's, which say nothing, or from home. None for
+ * a song on no page opened.
+ */
+export const originOf = (id: string): Origin | undefined => lists.get(id)?.origin;
+
 /** The app asked for a song's lyrics, which it does as the song starts. */
 export function heard(): void {
   playedAt = Date.now();
@@ -121,7 +148,7 @@ export function heard(): void {
 export function playing(id: string): void {
   playedAt = Date.now();
   if (!lossless()) return;
-  const list = lists.get(id);
+  const list = lists.get(id)?.ids;
   if (!list) return;
   const at = list.indexOf(id);
   const next = list.slice(at + 1, at + 1 + NEXT);
@@ -175,8 +202,8 @@ const ready = (id: string) => (lossless() ? preparedOrPreparing(id) : resolvedOr
 const FOUND = 20;
 const FINDING_AT_ONCE = 4;
 
-export function prefetch(tracks: Track[], run?: Run): void {
-  const all = listed(tracks, run);
+export function prefetch(tracks: Track[], run?: Run, origin?: Origin): void {
+  const all = listed(tracks, run, origin);
   if (!lossless() && !signedIn()) return;
   if (lossless()) {
     const page = all.slice(0, FOUND);

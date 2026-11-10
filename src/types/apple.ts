@@ -11,8 +11,13 @@ export interface PlayParams {
   kind?: string;
   catalogId?: string | number;
   reportingId?: string;
+  /** A library playlist's catalog ID, as catalogId is a library song's. */
   globalId?: string;
+  /** A catalog playlist's version. */
+  versionHash?: string;
   isLibrary?: boolean;
+  /** false for a song the listener uploaded, whose plays Apple isn't told of. */
+  reporting?: boolean;
 }
 
 export interface Attributes {
@@ -64,6 +69,8 @@ export interface Resource {
 export interface Body {
   data?: Resource[];
   next?: string;
+  /** How many the whole list has, which the library's lists say. */
+  meta?: { total?: number };
 }
 
 export interface SearchBody {
@@ -88,7 +95,7 @@ export interface WebPlaybackBody {
   customerMessage?: string;
   songList?: {
     "hls-playlist-url"?: string;
-    assets?: { flavor?: string; URL?: string }[];
+    assets?: { flavor?: string; URL?: string; metadata?: { fileExtension?: string } }[];
   }[];
 }
 

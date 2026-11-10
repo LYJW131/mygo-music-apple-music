@@ -94,6 +94,11 @@ export interface Stream {
   type: string;
   quality?: string;
   bitRate?: number;
+  /** In bytes, where it's known. */
+  size?: number;
+  /** For Sound Check, in dB as ReplayGain's, and linear (soundcheck.ts). */
+  gain?: number;
+  peak?: number;
 }
 
 export interface LyricWord {

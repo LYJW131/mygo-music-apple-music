@@ -5,7 +5,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { art, coverName, fileURL } from "../src/artwork.ts";
 import { parseTTML } from "../src/lyrics.ts";
-import { songsOf, toAlbum, toTrack } from "../src/models.ts";
+import { artistOfParts, songsOf, toAlbum, toTrack } from "../src/models.ts";
+import { named } from "../src/pages.ts";
 import { parseAppleURL } from "../src/search.ts";
 
 test("TTML: word timing, translations, background vocals, entities", () => {
@@ -69,7 +70,11 @@ test("songs: catalog IDs, library songs, what doesn't play", () => {
   });
   assert.equal(library.id, "1783644604");
   assert.equal(library.album.id, "1783644603");
-  assert.equal(library.artists?.[0].id, "name:MyGO!!!!!");
+  // Its artist is looked up by the song, not by a name another artist may share but for case.
+  assert.equal(library.artists?.[0].id, "of:songs:1783644604:MyGO!!!!!");
+  assert.deepEqual(artistOfParts(library.artists![0].id), { type: "songs", of: "1783644604", name: "MyGO!!!!!" });
+  assert.deepEqual(artistOfParts("of:albums:42:A: B"), { type: "albums", of: "42", name: "A: B" });
+  assert.equal(artistOfParts("name:LiSA"), null);
   assert.equal(library.unavailable, false);
   // One they uploaded plays by its library ID; one the catalog no longer
   // has comes without playParams, and doesn't.
@@ -90,4 +95,15 @@ test("songs: catalog IDs, library songs, what doesn't play", () => {
     toAlbum({ id: "l.abc", type: "library-albums", attributes: { playParams: { catalogId: 42 } } }).id,
     "42",
   );
+});
+
+test("an artist found by name is the one so named, though the search puts another first", () => {
+  const found = [
+    { id: "1583908668", type: "artists", attributes: { name: "LISA" } },
+    { id: "573943518", type: "artists", attributes: { name: "LiSA" } },
+  ];
+  assert.equal(named(found, "LiSA")?.id, "573943518");
+  assert.equal(named(found, "lisa")?.id, "1583908668", "else the first so named but for case");
+  assert.equal(named(found, "Lisa Ono")?.id, "1583908668", "else the first");
+  assert.equal(named([], "LiSA"), undefined);
 });

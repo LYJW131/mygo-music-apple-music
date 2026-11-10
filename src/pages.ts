@@ -1,11 +1,12 @@
 // Albums, artists and playlists, from the catalog or the library. Library
 // IDs start with l. (albums) and p. (playlists); an artist the app only knows
-// by name has the ID name:<name>.
+// by name has the ID name:<name>, and by a song or album of theirs
+// of:<songs|albums>:<ID>:<name> (artistOf).
 
 import { allPages, catalog, first, me, storefront } from "./api.ts";
 import { kept } from "./background.ts";
 import { edited, inLibrary, playlistFreshness } from "./library.ts";
-import { songsOf, toAlbum, toArtist, toPlaylist } from "./models.ts";
+import { artistOfParts, songsOf, toAlbum, toArtist, toPlaylist } from "./models.ts";
 import { prefetch, warm } from "./prefetch.ts";
 import type { Resource } from "./types/apple.ts";
 import type { AlbumPage, ArtistPage, Playlist } from "./types/music.ts";
@@ -33,15 +34,36 @@ export async function album({ id }: { id: string }): Promise<AlbumPage> {
   return { album: { ...toAlbum(item), saved: !!own }, tracks: songs };
 }
 
+/**
+ * The one of found named name: the first so named, else the first so named
+ * but for case, else the first. Apple's search puts LISA before LiSA in some
+ * storefronts, whichever is asked for.
+ */
+export function named(found: Resource[], name: string): Resource | undefined {
+  return (
+    found.find((r) => r.attributes?.name === name) ??
+    found.find((r) => r.attributes?.name?.toLowerCase() === name.toLowerCase()) ??
+    found[0]
+  );
+}
+
 export async function artist({ id }: { id: string }): Promise<ArtistPage> {
   warm();
+  const of = artistOfParts(id);
+  if (of) {
+    // The artists of the song or album itself; by name only if the catalog doesn't say.
+    const body = await catalog(`/${of.type}/${of.of}/artists`, { limit: 10 }).catch(() => null);
+    const found = named(body?.data ?? [], of.name);
+    id = found ? found.id : `name:${of.name}`;
+  }
   if (id.startsWith("name:")) {
+    const name = id.slice(5);
     const body = await catalog<{ results?: { artists?: { data?: Resource[] } } }>("/search", {
-      term: id.slice(5),
+      term: name,
       types: "artists",
-      limit: 1,
+      limit: 10,
     });
-    const found = body?.results?.artists?.data?.[0];
+    const found = named(body?.results?.artists?.data ?? [], name);
     if (!found) throw fail("unavailable", t("Apple Music doesn't have this"));
     id = found.id;
   }

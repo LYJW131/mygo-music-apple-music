@@ -44,6 +44,22 @@ const artistIdOf = (item: Resource): string => item.relationships?.artists?.data
 // An artist without an ID, by name: the artist page looks them up.
 const byName = (name: string): Artist => ({ id: `name:${name}`, name });
 
+/**
+ * The artist of a catalog song or album that doesn't say their ID, as the
+ * library's songs mostly don't: the artist page asks the catalog for that
+ * song's or album's artists, which a search by name gets wrong for artists
+ * whose names differ only in case, as LiSA and LISA.
+ */
+export function artistOf(type: "songs" | "albums", id: string, name: string): Artist {
+  return isCatalogID(id) ? { id: `of:${type}:${id}:${name}`, name } : byName(name);
+}
+
+/** What an artistOf ID says: whose artist, and their name. */
+export function artistOfParts(id: string): { type: string; of: string; name: string } | null {
+  const m = id.match(/^of:(songs|albums):(\d+):([\s\S]*)$/);
+  return m ? { type: m[1], of: m[2], name: m[3] } : null;
+}
+
 export function toTrack(item: Resource): Track {
   const a = item.attributes ?? {};
   const id = songID(item);
@@ -51,7 +67,7 @@ export function toTrack(item: Resource): Track {
   if (item.type === "songs") noteAudio(id, a);
   noteDuration(id, a.durationInMillis);
   const artistName = a.artistName ?? "";
-  const artists = [{ id: artistIdOf(item) || `name:${artistName}`, name: artistName }];
+  const artists = [{ id: artistIdOf(item) || artistOf("songs", id, artistName).id, name: artistName }];
   return {
     id,
     name: a.name ?? "",
@@ -60,7 +76,7 @@ export function toTrack(item: Resource): Track {
       id: albumIdOf(item),
       name: a.albumName ?? "",
       imageUrl: keptArt(a.artwork),
-      artists: a.albumArtistName ? [byName(a.albumArtistName)] : artists,
+      artists: a.albumArtistName ? [artistOf("albums", albumIdOf(item), a.albumArtistName)] : artists,
     },
     duration: a.durationInMillis ?? 0,
     url: a.url,
@@ -75,11 +91,14 @@ export const songsOf = (items: Resource[] | undefined): Track[] =>
 export function toAlbum(item: Resource): Album {
   const a = item.attributes ?? {};
   const catalogId = a.playParams?.catalogId;
+  const id = catalogId ? String(catalogId) : String(item.id);
   return {
-    id: catalogId ? String(catalogId) : String(item.id),
+    id,
     name: a.name ?? "",
     imageUrl: keptArt(a.artwork),
-    artists: a.artistName ? [{ id: artistIdOf(item) || `name:${a.artistName}`, name: a.artistName }] : [],
+    artists: a.artistName
+      ? [{ id: artistIdOf(item) || artistOf("albums", id, a.artistName).id, name: a.artistName }]
+      : [],
     released: a.releaseDate,
   };
 }

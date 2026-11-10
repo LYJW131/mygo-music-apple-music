@@ -22,9 +22,12 @@ export function foreground<A extends unknown[], R>(fn: (...args: A) => R | Promi
   };
 }
 
-/** Resolves once the app has asked nothing for a second. */
-export async function idle(): Promise<void> {
-  while (asking > 0 || Date.now() - lastAsked < QUIET) await sleep(250);
+/**
+ * Resolves once the app has asked nothing for a second, or, before that,
+ * once hurry says to wait no longer.
+ */
+export async function idle(hurry: () => boolean = () => false): Promise<void> {
+  while (!hurry() && (asking > 0 || Date.now() - lastAsked < QUIET)) await sleep(250);
 }
 
 // What was fetched, by key. An answer stays good while its version is the
@@ -76,7 +79,10 @@ export function kept<T>(
     return e.job.promise as Promise<T>;
   }
   const job: Job = { urgent: !ahead, version: fresh.version, promise: Promise.resolve() };
-  const pause = () => (job.urgent ? Promise.resolve() : idle());
+  // A pause that began in the background ends as the app comes to ask for
+  // this very thing: its asking is the app asking, which the pause would
+  // otherwise wait out, and the ask for it, so neither would ever end.
+  const pause = () => idle(() => job.urgent);
   const done = (store: boolean, value?: unknown) => {
     // Forgotten while it was fetched: what came is already old.
     if (entries.get(key)?.job !== job) return;

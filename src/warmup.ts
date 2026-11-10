@@ -42,17 +42,24 @@ export function stopWarming(): void {
   lastRun = 0;
 }
 
+/**
+ * What's fetched ahead of the library, in order, each as the app asks for it
+ * or, ahead, as the background does: tests/warmup.test.ts asks every one of
+ * them both ways at once.
+ */
+export const AHEAD: ((ahead: boolean) => Promise<unknown>)[] = [
+  (ahead) => libraryPlaylists(ahead),
+  (ahead) => liked({ offset: 0 }, ahead),
+  (ahead) => savedAlbums({ offset: 0 }, ahead),
+  (ahead) => stations(undefined, ahead),
+  (ahead) => recentlyAdded(ahead),
+];
+
 async function run(): Promise<void> {
   running = true;
   lastRun = Date.now();
   const mine = generation;
-  const steps: (() => Promise<unknown>)[] = [
-    () => libraryPlaylists(true),
-    () => liked({ offset: 0 }, true),
-    () => savedAlbums({ offset: 0 }, true),
-    () => stations(undefined, true),
-    () => recentlyAdded(true),
-  ];
+  const steps: (() => Promise<unknown>)[] = AHEAD.map((step) => () => step(true));
   try {
     for (let i = 0; i < steps.length; i++) {
       await idle();

@@ -11,7 +11,7 @@
     "typecheck": "tsc -p tsconfig.json",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "npm run build && node --experimental-vm-modules --test tests/*.test.ts",
+    "test": "npm run build && node --experimental-vm-modules --test --test-force-exit tests/*.test.ts",
     "test:live": "npm run build && node --experimental-vm-modules tests/live.ts",
     "test:e2e": "node scripts/e2e.ts",
     "test:signed-in": "npm run build && node --experimental-vm-modules tests/signed-in.ts",

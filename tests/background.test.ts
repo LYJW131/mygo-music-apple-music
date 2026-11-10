@@ -76,3 +76,22 @@ test("the background waits while the app asks, and the app's ask joining it does
   await later;
   assert.equal(done, true);
 });
+
+test("the app asking for what's fetched ahead, while that waits for the app, doesn't wait for itself", async () => {
+  // Fetched ahead, it paused because the app was asking for something else.
+  let release!: () => void;
+  const other = foreground(() => new Promise<void>((r) => (release = r)));
+  const busy = other();
+  const ahead = kept("g", { maxAge: 60_000 }, async (pause) => (await pause(), "fetched"), true);
+  await tick();
+  // The app now asks for the very thing: its ask counts as the app asking,
+  // so a pause that waited for the app to be quiet waited for this ask, which
+  // waited for it. The Stations page never opened.
+  const ask = foreground(() => kept("g", { maxAge: 60_000 }, async () => "its own"));
+  const joined = ask();
+  release();
+  await busy;
+  const stuck = new Promise<string>((r) => setTimeout(() => r("stuck"), 3000));
+  assert.equal(await Promise.race([joined, stuck]), "fetched");
+  assert.equal(await ahead, "fetched");
+});

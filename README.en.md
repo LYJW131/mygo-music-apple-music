@@ -190,8 +190,10 @@ Others come from what a plugin is:
 
 When MyGo Music releases, an automated check looks at what the release means for this plugin: Claude reads the
 upstream changes, runs tests, and posts its verdict (nothing to do, optional, needed, or broken) on the
-[tracking issue](https://github.com/LYJW131/mygo-music-apple-music/issues/2). What needs changing is followed up in a
-new plugin release, which MyGo offers you as an update.
+[tracking issue](https://github.com/LYJW131/mygo-music-apple-music/issues/2). It also looks for anything in
+[What the plugin can't do](#limits) that the release's plugin interface now gives, and makes that feature, in a draft
+pull request apart from any fix, with this list changed to match. What needs changing is followed up in a new plugin
+release, which MyGo offers you as an update.
 
 ## Privacy
 

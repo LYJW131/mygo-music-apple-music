@@ -153,7 +153,7 @@ MyGo Music 是支持多种音源的通用播放器，插件接口只要求音源
 
 ## 跟随 MyGo Music 更新
 
-MyGo Music 发新版本后，会有一个自动化流程检查这个版本是否影响插件：Claude 阅读上游改动、实际运行测试，然后在[跟踪 issue](https://github.com/LYJW131/mygo-music-apple-music/issues/2) 里写下结论（无需更新、可选更新、需要更新或已失效）。需要改的会尽快跟进并发布插件新版本，MyGo 会提示你更新。
+MyGo Music 发新版本后，会有一个自动化流程检查这个版本是否影响插件：Claude 阅读上游改动、实际运行测试，然后在[跟踪 issue](https://github.com/LYJW131/mygo-music-apple-music/issues/2) 里写下结论（无需更新、可选更新、需要更新或已失效）。它也对照上面的[插件方案的限制](#limits)，看这个版本的插件接口有没有补上其中某一条，有就把对应的功能做出来，和兼容性修复分开各提一个草稿 PR，并改掉这份清单。需要改的会尽快跟进并发布插件新版本，MyGo 会提示你更新。
 
 ## 隐私
 

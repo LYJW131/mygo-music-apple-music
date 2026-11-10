@@ -91,6 +91,8 @@ export function parseTTML(ttml: string, language: string): Lyrics | null {
     if (key && translations[key]) line.translation = translations[key];
     lines.push(line);
   }
-  // Lyrics that aren't timed at all come as lines at 0: shown still.
+  // Lyrics that aren't timed at all come as lines at 0, which MyGo shows
+  // stopped at the last line: it has no way to show lyrics untimed, and drops
+  // LRC lines without a time.
   return lines.length ? { lines } : null;
 }

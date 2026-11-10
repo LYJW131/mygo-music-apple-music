@@ -103,7 +103,7 @@ MyGo Music 是支持多种音源的通用播放器，插件接口只要求音源
 
 - **只交数据，不画界面**：页面长什么样、按钮放在哪、界面上的文字，都由 MyGo Music 决定，插件只能改自己交出去的标题；页面也只在你点开时才向插件要。
 - **运行环境**：插件跑在 MyGo Music 的 JavaScript 运行时里，每次调用最多 30 秒，内存上限 256 MB，没有 Node 接口。解密和下载你上传的歌曲这类工作放在随插件附带的 `amhelper` 里。
-- **helper 要授权**：`amhelper` 是一个独立程序，要你在设置里允许插件启动程序。没有 `amhelper` 的平台（如 Windows arm64）改用 ffmpeg，那里播放不了你上传的歌曲，封面也要靠 ffmpeg 保存。
+- **helper 要授权**：`amhelper` 是一个独立程序，要你在设置里允许插件启动程序。没有 `amhelper` 的平台（如 Windows arm64）改用 ffmpeg，那里播放不了你上传的歌曲，没有音量均衡，封面也要靠 ffmpeg 保存。
 
 ## 跟随 MyGo Music 更新
 

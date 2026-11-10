@@ -137,7 +137,7 @@ Others come from what a plugin is:
   APIs. Decrypting songs and fetching the ones you uploaded is done in `amhelper`, which comes with the plugin.
 - **The helper needs allowing**: `amhelper` is a program of its own, which you allow the plugin to start in its
   settings. On a platform it doesn't come for, such as Windows on arm64, songs play through ffmpeg, songs you uploaded
-  don't play, and covers are kept through ffmpeg.
+  don't play, loudness isn't evened out, and covers are kept through ffmpeg.
 
 ## Keeping up with MyGo Music
 

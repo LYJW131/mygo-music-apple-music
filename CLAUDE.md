@@ -42,12 +42,13 @@ and tests amhelper.
   `stations.ts`, `lyrics.ts` (TTML).
 - Playing: `playback.ts` (webPlayback → m3u8 → license; the song handed to amhelper as `POST aac/<id>` with its key
   and length, the segments' EXTINFs added up, and played from `aac/<id>.m4a`; ffmpeg `-listen` on 127.0.0.1 as ADTS
-  where there's no amhelper), `amhelper.ts` (starts it; config on stdin), `prefetch.ts` (warm
+  where there's no amhelper; a song the listener uploaded, `i.…`, by webPlayback's `universalLibraryId`, its
+  unencrypted .m4a handed to amhelper as `POST upload/<id>`, and none without amhelper), `amhelper.ts` (starts it; config on stdin), `prefetch.ts` (warm
   connections, resolve the first 3 songs of a page, ≤15/min; every list the app may play from is noted, home's only
   where no page opened has the song, and a song played lossless works out the 12 after it; a station's 10 are worked out
   as they come; `lyrics`, asked as every song starts, even one played from the app's cache, counts as playing, which
-  leaves the wrapper asleep), `ffmpeg.ts`, `artwork.ts` (private playlist covers are slow blobstore links, kept locally
-  by amhelper's `POST cover/<name>`, or ffmpeg).
+  leaves the wrapper asleep), `ffmpeg.ts`, `artwork.ts` (private playlist covers, and uploaded songs' and albums', are slow
+  blobstore links, kept locally by amhelper's `POST cover/<name>`, or ffmpeg).
 - Listening history: `activity.ts` answers `played`, which MyGo calls as a song starts, by posting a start to Apple's
   play activity service as the web player's MusicKit does (`universal-activity-service.itunes.apple.com/play`), one
   event to a request, with the previous song's end timed by the clock. The container (album or playlist) is guessed:
@@ -61,7 +62,8 @@ and tests amhelper.
   `tlou` box: LKFS and true peak) into the stream's `gain` and `peak` for MyGo's player (`10^((gain+4)/20)`, capped at
   `1/peak`), bringing songs to -16 LKFS: `gain = -20 - LKFS`, the peak given only for a lift.
 - `helper/`: `main.go` routes, `aac.go` the AAC (CENC, AES-CTR with each sample's IV from `senc`, and an edit list that
-  skips the encoder's 2112 frames of priming), `cover.go` playlist covers (JPEG, shrunk to 600 wide), `account.go` an account's token (`/status`'s instances, then
+  skips the encoder's 2112 frames of priming), `cover.go` playlist covers (JPEG, shrunk to 600 wide), `upload.go` uploaded songs (6 connections
+  at once, the last 20 kept), `loudness.go` the `tlou` box, `account.go` an account's token (`/status`'s instances, then
   `/token?instance=`; neither waits behind songs), `wrapper.go` the
   wrapper client (one request at a time, `queue.go` puts played songs
   before ones prepared ahead), `hls.go` playlists, `mp4.go` decrypts Apple's 15 s fragments into ~1 s ones as they
@@ -110,7 +112,8 @@ The bundle runs in MyGo's moejs runtime, not Node:
 - `host.storage` keys: `mediaUserToken`, `givenToken` (the `mediaUserToken` setting last signed in with, for accounts
   the sign-in window can't sign in to), `storefront`, `profile` (name and picture, a day), `devToken`, `resolved` (song → media + key + seconds, ≤3000; ones kept without seconds have their playlist read again), `covers`,
   `quality` (the app's last asked), `wrapperAccount` (the wrapper and account named, the token it gave and when to ask
-  again), `lossless` (song → its ALAC or none, a week).
+  again), `lossless` (song → its ALAC and loudness, or none, a week;
+  one kept without loudness is prepared again).
 
 ## Conventions
 

@@ -257,12 +257,14 @@ test("the workflow's breakers: each phase's own, and a step timeout past all thr
     feature: { minutes: flag("feature-minutes"), dollars: flag("feature-dollars") },
   };
   assert.deepEqual(phases, {
-    check: { minutes: 30, dollars: 20 },
-    fix: { minutes: 20, dollars: 20 },
-    feature: { minutes: 20, dollars: 20 },
+    check: { minutes: 30, dollars: 10 },
+    fix: { minutes: 20, dollars: 10 },
+    feature: { minutes: 20, dollars: 10 },
   });
   const most = worst(Object.values(phases));
-  assert.deepEqual(most, { minutes: 105, dollars: 90 });
+  assert.deepEqual(most, { minutes: 105, dollars: 45 });
+  // At the model's standard speed: its fast mode costs twice as much.
+  assert.doesNotMatch(workflow, /--speed fast/);
   const step = Number(workflow.match(/- id: watch\n\s+continue-on-error: true\n\s+timeout-minutes: (\d+)/)?.[1]);
   const job = Number(workflow.match(/analyze:[^]*?timeout-minutes: (\d+)/)?.[1]);
   assert.ok(step >= most.minutes + 5, `the watch step's ${step} minutes don't outlast the phases' ${most.minutes}`);

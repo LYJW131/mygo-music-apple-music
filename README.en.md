@@ -85,6 +85,8 @@ from it, decrypts the song on this machine as it downloads, and hands it to MyGo
 
 - A wrapper-manager holds up to 10 accounts and picks the one for the song's country or region.
 - Whoever reaches the wrapper's port can use your account: don't expose a wrapper to the internet without a key.
+- MyGo Music's audio output runs at 48 kHz: Hi-Res Lossless above that is brought down to 48 kHz on its way out (see
+  [The output's sample rate](#limits)).
 
 <a id="ringo"></a>
 
@@ -101,16 +103,17 @@ plugin lacks it, by the name of the entry under [What the plugin can't do](#limi
 
 **Playing and quality**
 
-| Feature                                       | MyGo Music + this plugin                      | Ringo         | Why the plugin lacks it |
-| --------------------------------------------- | --------------------------------------------- | ------------- | ----------------------- |
-| 256 kbps AAC                                  | ✅                                            | ✅            |                         |
-| Lossless and Hi-Res Lossless (with a wrapper) | Partly: one Lossless level, the best there is | ✅ two levels | Settings are text boxes |
-| High Efficiency (HE-AAC, 64 kbps)             | ❌                                            | ✅            | Audio formats           |
-| Dolby Atmos for headphones or speakers        | ❌                                            | ✅            | Settings are text boxes |
-| Songs you uploaded                            | ✅                                            | ✅            |                         |
-| Even Out Loudness                             | ✅                                            | ✅            |                         |
-| The quality playing, in the player bar        | ❌                                            | ✅            | Audio formats           |
-| Autoplay (similar songs once the queue ends)  | ❌                                            | ✅            | Autoplay                |
+| Feature                                       | MyGo Music + this plugin                      | Ringo                                                  | Why the plugin lacks it  |
+| --------------------------------------------- | --------------------------------------------- | ------------------------------------------------------ | ------------------------ |
+| 256 kbps AAC                                  | ✅                                            | ✅                                                     |                          |
+| Lossless and Hi-Res Lossless (with a wrapper) | Partly: one Lossless level, the best there is | ✅ two levels                                          | Settings are text boxes  |
+| High Efficiency (HE-AAC, 64 kbps)             | ❌                                            | ✅                                                     | Audio formats            |
+| Dolby Atmos for headphones or speakers        | ❌                                            | ✅                                                     | Settings are text boxes  |
+| Songs you uploaded                            | ✅                                            | ✅                                                     |                          |
+| Even Out Loudness                             | ✅                                            | ✅                                                     |                          |
+| The quality playing, in the player bar        | ❌                                            | ✅                                                     | Audio formats            |
+| Output at the song's own sample rate          | ❌ everything is resampled to 48 kHz          | ✅ and on macOS the output device can be set to it too | The output's sample rate |
+| Autoplay (similar songs once the queue ends)  | ❌                                            | ✅                                                     | Autoplay                 |
 
 **Listening history** (with Use Listening History on)
 
@@ -180,6 +183,10 @@ Others come from what a plugin is:
 
 - **It hands over data, and draws nothing**: how a page looks, where its buttons are and the words on them are MyGo
   Music's; the plugin only names what it hands over, and is asked for a page only as it's opened.
+- **The output's sample rate**: the audio is played by MyGo Music's player, whose output runs at 48 kHz: every other
+  rate is resampled to it, with no low-pass filter before going down. A 96 kHz Hi-Res Lossless song reaches the device
+  at 48 kHz, and what it has above 24 kHz folds back into what is heard. The plugin only hands over audio and can't
+  change that; Ringo changed the player, and plays each song at its own rate.
 - **Where it runs**: in MyGo Music's JavaScript runtime, 30 seconds a call at most, in at most 256 MB, without Node's
   APIs. Decrypting songs and fetching the ones you uploaded is done in `amhelper`, which comes with the plugin.
 - **The helper needs allowing**: `amhelper` is a program of its own, which you allow the plugin to start in its

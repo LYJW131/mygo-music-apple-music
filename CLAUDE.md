@@ -57,7 +57,9 @@ and tests amhelper.
 - Lossless: `lossless.ts` (through `amhelper.ts`, whose config on stdin is wrapper, key, cache dir and covers dir; it
   answers `{port, secret}`, and runs without a wrapper for AAC and covers) notes each catalog song's `audioTraits` and `extendedAssetUrls.enhancedHls`, and asks amhelper to `prepare` a song
   and serve `song/<id>.m4a`; `null` falls back to AAC. Following amdl, lossless songs use the catalog's master
-  playlist and Hi-Res ones the wrapper's `/m3u8` first (the catalog's sometimes lacks 88.2–192 kHz).
+  playlist and Hi-Res ones the wrapper's `/m3u8` first (the catalog's sometimes lacks 88.2–192 kHz). The
+  `losslessQuality` setting (a `select` from MyGo 0.1.23, a text field before) set to `lossless` asks amhelper for at
+  most 24-bit/48 kHz (`maxRate`, `maxBits`); changing it forgets what was worked out.
 - Sound Check: `soundcheck.ts` turns the loudness amhelper reads from each file's header (`helper/loudness.go`, the
   `tlou` box: LKFS and true peak) into the stream's `gain` and `peak` for MyGo's player (`10^((gain+4)/20)`, capped at
   `1/peak`), bringing songs to -16 LKFS: `gain = -20 - LKFS`, the peak given only for a lift.

@@ -35,6 +35,23 @@
       "help": "The wrapper's key (API_KEY), the same one amdl uses: for a wrapper-manager on Cloudflare, or one that faces the internet. Empty for one on this computer or your network without a key."
     },
     {
+      "key": "losslessQuality",
+      "label": "Lossless Quality",
+      "type": "select",
+      "options": [
+        {
+          "value": "",
+          "label": "Hi-Res Lossless"
+        },
+        {
+          "value": "lossless",
+          "label": "Lossless"
+        }
+      ],
+      "help": "With a wrapper, and MyGo Music's quality set to Lossless: Hi-Res Lossless plays each song at the best it has, up to 24-bit/192 kHz; Lossless keeps to 24-bit/48 kHz, which MyGo Music plays without resampling. Where this is a text field (MyGo Music before 0.1.23), leave it empty for Hi-Res Lossless, or type lossless.",
+      "link": "https://github.com/LYJW131/mygo-music-apple-music#lossless"
+    },
+    {
       "key": "wrapperAccount",
       "label": "Wrapper Account",
       "help": "To sign in as an Apple Account the wrapper holds, without the sign-in window: its Apple ID as logged in to the wrapper, or a country or region code such as jp for the wrapper's account there. When the wrapper holds several accounts, each listener names their own. Empty to sign in here.",

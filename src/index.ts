@@ -18,6 +18,7 @@ import * as act from "./activity.ts";
 import { foreground } from "./background.ts";
 import * as br from "./browse.ts";
 import * as lib from "./library.ts";
+import { forgetLossless } from "./lossless.ts";
 import * as ly from "./lyrics.ts";
 import * as pg from "./pages.ts";
 import * as pb from "./playback.ts";
@@ -56,6 +57,7 @@ export const signOut = asked(() => {
 // set yet, or not answering, as the listener signs in.
 export const setSetting = asked(async (p: { key: string; value: string }) => {
   if (p.key === "wrapper" || p.key === "wrapperKey") acc.retryWrapper();
+  if (p.key === "losslessQuality") forgetLossless();
   if (p.key !== "mediaUserToken" && p.key !== "wrapperAccount") return;
   stopWarming();
   if (p.key === "mediaUserToken") acc.useGivenToken();

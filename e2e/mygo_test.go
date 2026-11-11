@@ -11,7 +11,9 @@ package player
 //
 // What's played is checked against the same audio, unencrypted, decoded by
 // the same player: AAC less the 2112 frames of priming amhelper's edit list
-// skips, ALAC whole.
+// skips, ALAC whole. The ALAC is played at both of the Lossless Quality
+// setting's levels, from a song that has a 96 kHz variant too: Lossless takes
+// the 44.1 kHz one, and Hi-Res Lossless, the setting left empty, the 96 kHz.
 
 import (
 	"bufio"
@@ -34,6 +36,9 @@ import (
 const (
 	aacID  = "1440000001"
 	alacID = "1440000002"
+	// Not kept as played before: asked about at the level the setting names.
+	hiresID   = "1440000003"
+	hiresRate = 96000
 	// fakeapple's ALAC song is 431 packets of 4096 frames; its AAC 1723 of 1024.
 	songSeconds = 40
 )
@@ -54,7 +59,7 @@ func TestAppleMusicEndToEnd(t *testing.T) {
 		plugin.SetAppVersion(v)
 	}
 
-	cmd := exec.Command(fakeapple, "-seconds", fmt.Sprint(songSeconds), "-testdata", testdata)
+	cmd := exec.Command(fakeapple, "-seconds", fmt.Sprint(songSeconds), "-hires", fmt.Sprint(hiresRate), "-testdata", testdata)
 	cmd.Stderr = os.Stderr
 	out, err := cmd.StdoutPipe()
 	if err != nil {
@@ -122,21 +127,40 @@ func TestAppleMusicEndToEnd(t *testing.T) {
 
 	aacFrames := int64(math.Round(f.AACSeconds*44100)) - 2112
 	t.Run("aac", func(t *testing.T) {
-		got := play(t, p, aacID, "high", f.AACKey, aacFrames)
+		got := play(t, p, aacID, "high", f.AACKey, 44100, aacFrames)
 		want := decode(t, f.Wrapper+"/cdn/1/aac-plain.mp4", int64(f.AACSeconds*1000))
 		same(t, got, want[2112*2:])
 	})
+	// The setting as MyGo's menu saves it (0.1.23 on), and as a listener
+	// types it in the text field before: the song kept as found without a
+	// limit is asked about again, and plays from the 44.1 kHz variant.
 	t.Run("alac", func(t *testing.T) {
-		got := play(t, p, alacID, "lossless", "", 431*4096)
+		if err := p.SetSetting("losslessQuality", "lossless"); err != nil {
+			t.Fatal(err)
+		}
+		got := play(t, p, alacID, "lossless", "", 44100, 431*4096)
 		want := decode(t, f.Wrapper+"/cdn/1/plain.m4a", songSeconds*1000)
 		same(t, got, want)
+		got = play(t, p, hiresID, "lossless", "", 44100, 431*4096)
+		same(t, got, want)
+	})
+	// Emptied, Hi-Res Lossless: the same songs, forgotten, from the 96 kHz one.
+	t.Run("hires", func(t *testing.T) {
+		if err := p.SetSetting("losslessQuality", ""); err != nil {
+			t.Fatal(err)
+		}
+		frames := int64(math.Ceil(songSeconds*hiresRate/4096.0)) * 4096
+		want := decode(t, f.Wrapper+"/cdn/1/hires-plain.m4a", songSeconds*1000)
+		for _, id := range []string{hiresID, alacID} {
+			same(t, play(t, p, id, "lossless", "", hiresRate, frames), want)
+		}
 	})
 }
 
 // play asks the plugin for the song as the app does, and plays it with the
 // app's player: its length as it opens, a seek to three quarters, and then
 // the whole song from the start, which it answers.
-func play(t *testing.T, p *plugin.Plugin, id, quality, key string, frames int64) []float32 {
+func play(t *testing.T, p *plugin.Plugin, id, quality, key string, rate int, frames int64) []float32 {
 	t0 := time.Now()
 	st, err := p.Stream(id, quality)
 	if err != nil {
@@ -156,8 +180,8 @@ func play(t *testing.T, p *plugin.Plugin, id, quality, key string, frames int64)
 	}
 	defer s.Close()
 	opened := time.Since(t0)
-	if s.SampleRate() != 44100 {
-		t.Errorf("sample rate %d, want 44100", s.SampleRate())
+	if s.SampleRate() != rate {
+		t.Errorf("sample rate %d, want %d", s.SampleRate(), rate)
 	}
 	if s.Len() != frames {
 		t.Errorf("%d frames long as it opens, want %d", s.Len(), frames)
@@ -168,14 +192,14 @@ func play(t *testing.T, p *plugin.Plugin, id, quality, key string, frames int64)
 		t.Fatalf("seek: %v", err)
 	}
 	var heard int
-	for heard < 44100*2 {
+	for heard < rate*2 {
 		n, err := s.Read(buf)
 		heard += n
 		if err != nil {
 			break
 		}
 	}
-	if heard < 44100*2 {
+	if heard < rate*2 {
 		t.Errorf("a second after a seek to three quarters gave %d samples", heard)
 	}
 

@@ -130,9 +130,32 @@ test("plugin.json and the locales ship, and every text and setting has its Chine
   const source = await readFile(join(dist, "index.js"), "utf8");
   const texts = [...source.matchAll(/\bt\(\s*"((?:[^"\\]|\\.)*)"\s*,?\s*\)/g)].map((m) => JSON.parse(`"${m[1]}"`));
   const titles = (manifest.navigation as { title?: string }[]).map((n) => n.title).filter(Boolean);
-  const settings = (manifest.settings as { label: string; help?: string }[]).flatMap((s) => [s.label, s.help]);
+  type Setting = { label: string; help?: string; options?: { label: string }[] };
+  const settings = (manifest.settings as Setting[]).flatMap((s) => [
+    s.label,
+    s.help,
+    ...(s.options ?? []).map((o) => o.label),
+  ]);
   assert.ok(texts.length > 20);
   for (const text of [...texts, ...titles, ...settings].filter(Boolean)) {
     assert.ok(locale[text!], `no Chinese for ${JSON.stringify(text)}`);
   }
+});
+
+// MyGo Music 0.1.23 draws a setting with a type as a menu, and falls back to a
+// text field when its options are empty, or two share a label or a value;
+// older ones always show the text field, so the help says what to type.
+test("Lossless Quality is a menu of the two levels, whose values a text field can take", async () => {
+  const manifest = JSON.parse(await readFile(join(dist, "plugin.json"), "utf8"));
+  const setting = (
+    manifest.settings as { key: string; type?: string; help: string; options?: { value: string; label: string }[] }[]
+  ).find((s) => s.key === "losslessQuality")!;
+  assert.equal(setting.type, "select");
+  assert.deepEqual(
+    setting.options!.map((o) => o.value),
+    ["", "lossless"],
+  );
+  assert.equal(new Set(setting.options!.map((o) => o.label)).size, 2);
+  assert.match(setting.help, /type lossless/);
+  assert.equal(manifest.minAppVersion, "0.1.21");
 });

@@ -89,7 +89,7 @@ from it, decrypts the song on this machine as it downloads, and hands it to MyGo
   the best it has, up to 24-bit/192 kHz; **Lossless** keeps to 24-bit/48 kHz. From MyGo Music 0.1.23 it is a menu;
   before, a text field: leave it empty for Hi-Res Lossless, or type `lossless`.
 - MyGo Music's audio output runs at 48 kHz: Hi-Res Lossless above that is brought down to 48 kHz on its way out (see
-  [The output's sample rate](#limits)); the **Lossless** level plays without resampling.
+  [The output's sample rate](#limits)); the **Lossless** level is never brought down.
 
 <a id="ringo"></a>
 
@@ -187,10 +187,12 @@ things the plugin left out, but things the interface doesn't give it yet:
 Others come from what a plugin is:
 
 - **It hands over data, and draws nothing**: how a page looks, where its buttons are and the words on them are MyGo
-  Music's; the plugin only names what it hands over, and is asked for a page only as it's opened.
+  Music's; the plugin only names what it hands over (from MyGo Music 0.1.24 that includes the titles of the Favorite Songs
+  and Library Albums pages), not words like "Save" or "Like" on buttons and notices, and is asked for a page only as it's opened.
 - **The output's sample rate**: the audio is played by MyGo Music's player, whose output runs at 48 kHz: every other
-  rate is resampled to it, with no low-pass filter before going down. A 96 kHz Hi-Res Lossless song reaches the device
-  at 48 kHz, and what it has above 24 kHz folds back into what is heard. The plugin only hands over audio and can't
+  rate is resampled to it, and a 96 kHz Hi-Res Lossless song reaches the device at 48 kHz. From MyGo Music 0.1.24 it is
+  low-pass filtered before going down; 0.1.21 to 0.1.23 don't filter, and what it has above 24 kHz folds back into
+  what is heard. The plugin only hands over audio and can't
   change that; Ringo changed the player, and plays each song at its own rate.
 - **Where it runs**: in MyGo Music's JavaScript runtime, 30 seconds a call at most, in at most 256 MB, without Node's
   APIs. Decrypting songs and fetching the ones you uploaded is done in `amhelper`, which comes with the plugin.

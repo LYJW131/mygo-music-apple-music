@@ -52,5 +52,5 @@
   "Lossless Quality": "无损音质",
   "Hi-Res Lossless": "高解析度无损",
   "Lossless": "无损",
-  "With a wrapper, and MyGo Music's quality set to Lossless: Hi-Res Lossless plays each song at the best it has, up to 24-bit/192 kHz; Lossless keeps to 24-bit/48 kHz, which MyGo Music plays without resampling. Where this is a text field (MyGo Music before 0.1.23), leave it empty for Hi-Res Lossless, or type lossless.": "配有 wrapper 且 MyGo Music 的音质设为“无损”时：“高解析度无损”按每首歌的最高规格播放，最高 24 位/192 kHz；“无损”不超过 24 位/48 kHz，MyGo Music 无需重采样即可播放。这里若是文本框（MyGo Music 0.1.23 之前），留空为高解析度无损，填 lossless 为无损。"
+  "With a wrapper, and MyGo Music's quality set to Lossless: Hi-Res Lossless plays each song at the best it has, up to 24-bit/192 kHz; Lossless keeps to 24-bit/48 kHz, which MyGo Music never has to bring down. Where this is a text field (MyGo Music before 0.1.23), leave it empty for Hi-Res Lossless, or type lossless.": "配有 wrapper 且 MyGo Music 的音质设为“无损”时：“高解析度无损”按每首歌的最高规格播放，最高 24 位/192 kHz；“无损”不超过 24 位/48 kHz，MyGo Music 不用降采样。这里若是文本框（MyGo Music 0.1.23 之前），留空为高解析度无损，填 lossless 为无损。"
 }

@@ -48,7 +48,7 @@
           "label": "Lossless"
         }
       ],
-      "help": "With a wrapper, and MyGo Music's quality set to Lossless: Hi-Res Lossless plays each song at the best it has, up to 24-bit/192 kHz; Lossless keeps to 24-bit/48 kHz, which MyGo Music plays without resampling. Where this is a text field (MyGo Music before 0.1.23), leave it empty for Hi-Res Lossless, or type lossless.",
+      "help": "With a wrapper, and MyGo Music's quality set to Lossless: Hi-Res Lossless plays each song at the best it has, up to 24-bit/192 kHz; Lossless keeps to 24-bit/48 kHz, which MyGo Music never has to bring down. Where this is a text field (MyGo Music before 0.1.23), leave it empty for Hi-Res Lossless, or type lossless.",
       "link": "https://github.com/LYJW131/mygo-music-apple-music#lossless"
     },
     {

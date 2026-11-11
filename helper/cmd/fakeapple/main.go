@@ -1,6 +1,8 @@
 // fakeapple stands in for a wrapper and Apple's CDN, so that amhelper can be
 // run end to end without an Apple account: the wrapper's /status, /m3u8 and
-// /key, an enhanced-HLS master playlist with one ALAC variant, its media
+// /key, an enhanced-HLS master playlist with one ALAC variant (and with
+// -hires a second, at that rate and called 24-bit, as a Hi-Res Lossless
+// song's: hires.m3u8, hires.mp4 and hires-plain.m4a), its media
 // playlist, and the encrypted file, laid out as Apple's are (sample
 // descriptions taking turns by fragment, 15-second fragments, no length in
 // the header).
@@ -23,7 +25,7 @@
 //	ffmpeg -f lavfi -i "aevalsrc='0.3*sin(2*PI*(220+110*t)*t)|0.3*sin(2*PI*(330+55*t)*t)':s=44100:d=2" \
 //	  -c:a aac -aac_pns 0 -b:a 128k -f adts tone.aac
 //
-//	go run ./cmd/fakeapple [-addr 127.0.0.1:0] [-seconds 40] [-rate 44100] [-kbps 0] [-key-delay 0]
+//	go run ./cmd/fakeapple [-addr 127.0.0.1:0] [-seconds 40] [-rate 44100] [-hires 0] [-kbps 0] [-key-delay 0]
 //
 // It prints one JSON line, {"wrapper": URL, "master": URL of song 1, "aac":
 // path of song 1's AAC, "aacKey": its key in hex, "aacSeconds": its length as
@@ -71,6 +73,7 @@ func main() {
 	addr := flag.String("addr", "127.0.0.1:0", "address to listen on")
 	seconds := flag.Float64("seconds", 40, "how long the song is")
 	rate := flag.Int("rate", 44100, "the sample rate the files claim (the packet decodes at any)")
+	hires := flag.Int("hires", 0, "a second ALAC variant's sample rate, as a Hi-Res Lossless song has; 0 for none")
 	kbps := flag.Int("kbps", 0, "serve the media file at most this fast, in kilobytes a second; 0 for no limit")
 	keyDelay := flag.Duration("key-delay", 0, "how long /key takes, as a remote wrapper's does")
 	testdata := flag.String("testdata", defaultTestdata(), "the folder with track_1720704575_s1.{json,ct,pt}")
@@ -87,7 +90,18 @@ func main() {
 	packets := int(math.Ceil(*seconds * float64(*rate) / frames))
 	encrypted := song(ct, packets, *rate, true)
 	plain := song(pt, packets, *rate, false)
-	playlist := mediaPlaylist(packets, *rate)
+	playlist := mediaPlaylist(packets, *rate, "media.mp4")
+	var hiresEncrypted, hiresPlain []byte
+	var hiresPlaylist, hiresVariant string
+	if *hires > 0 {
+		n := int(math.Ceil(*seconds * float64(*hires) / frames))
+		hiresEncrypted, hiresPlain = song(ct, n, *hires, true), song(pt, n, *hires, false)
+		hiresPlaylist = mediaPlaylist(n, *hires, "hires.mp4")
+		hiresVariant = fmt.Sprintf(`#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio-alac-stereo-%[1]d-24",NAME="ALAC",SAMPLE-RATE="%[1]d",BIT-DEPTH="24"
+#EXT-X-STREAM-INF:AVERAGE-BANDWIDTH=3000000,BANDWIDTH=3300000,CODECS="alac",AUDIO="audio-alac-stereo-%[1]d-24"
+hires.m3u8
+`, *hires)
+	}
 	tone := adtsFrames(toneADTS)
 	aacPackets := int(math.Ceil(*seconds * 44100 / aacFrames))
 	aacEncrypted, aacPlain := aacSong(tone, aacPackets, true), aacSong(tone, aacPackets, false)
@@ -119,8 +133,13 @@ func main() {
 aac.m3u8
 #EXT-X-STREAM-INF:AVERAGE-BANDWIDTH=1000000,BANDWIDTH=1100000,CODECS="alac",AUDIO="audio-alac-stereo-%[1]d-16"
 alac.m3u8
-`, *rate)
+%[2]s`, *rate, hiresVariant)
 	})
+	if *hires > 0 {
+		mux.HandleFunc("GET /cdn/{id}/hires.m3u8", func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, hiresPlaylist) })
+		mux.HandleFunc("GET /cdn/{id}/hires.mp4", func(w http.ResponseWriter, r *http.Request) { serve(w, r, hiresEncrypted, *kbps) })
+		mux.HandleFunc("GET /cdn/{id}/hires-plain.m4a", func(w http.ResponseWriter, r *http.Request) { serve(w, r, hiresPlain, 0) })
+	}
 	mux.HandleFunc("GET /cdn/{id}/alac.m3u8", func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, playlist) })
 	mux.HandleFunc("GET /cdn/{id}/media.mp4", func(w http.ResponseWriter, r *http.Request) { serve(w, r, encrypted, *kbps) })
 	mux.HandleFunc("GET /cdn/{id}/plain.m4a", func(w http.ResponseWriter, r *http.Request) { serve(w, r, plain, 0) })
@@ -254,17 +273,17 @@ func song(sample []byte, packets, rate int, encrypted bool) []byte {
 
 // mediaPlaylist lists the fragments with their lengths, which amhelper adds
 // up into the song's, and the keys: the prefetch key, then the song's (c23).
-func mediaPlaylist(packets, rate int) string {
+func mediaPlaylist(packets, rate int, file string) string {
 	var b strings.Builder
 	b.WriteString("#EXTM3U\n#EXT-X-TARGETDURATION:15\n#EXT-X-VERSION:7\n")
 	fmt.Fprintf(&b, "#EXT-X-KEY:METHOD=SAMPLE-AES,URI=%q,KEYFORMAT=\"com.apple.streamingkeydelivery\"\n", prefetchKey)
-	b.WriteString("#EXT-X-MAP:URI=\"media.mp4\"\n")
+	fmt.Fprintf(&b, "#EXT-X-MAP:URI=%q\n", file)
 	perFragment := int(fragmentLen * float64(rate) / frames)
 	for n, first := 0, 0; first < packets; n, first = n+1, first+perFragment {
 		if n == 1 {
 			b.WriteString("#EXT-X-KEY:METHOD=SAMPLE-AES,URI=\"skd://itunes.apple.com/p1720704575/c23\",KEYFORMAT=\"com.apple.streamingkeydelivery\"\n")
 		}
-		fmt.Fprintf(&b, "#EXTINF:%.5f,\nmedia.mp4\n", float64((min(first+perFragment, packets)-first)*frames)/float64(rate))
+		fmt.Fprintf(&b, "#EXTINF:%.5f,\n%s\n", float64((min(first+perFragment, packets)-first)*frames)/float64(rate), file)
 	}
 	b.WriteString("#EXT-X-ENDLIST\n")
 	return b.String()

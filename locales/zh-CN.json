@@ -48,5 +48,9 @@
   "Set the Wrapper Address too, to sign in with an account the wrapper holds": "要用 wrapper 里的账户登录，还需要设置 Wrapper 地址",
   "Signing in with the wrapper needs amhelper, which the plugin for this platform lacks": "用 wrapper 登录需要 amhelper，但这个平台的插件没有附带它",
   "Check the Wrapper Account in the settings": "请检查设置里的 Wrapper 账户",
-  "Apple Music didn't accept the token of the wrapper's account. Log it in to the wrapper again.": "Apple Music 不接受 wrapper 里这个账户的令牌。请在 wrapper 里重新登录该账户。"
+  "Apple Music didn't accept the token of the wrapper's account. Log it in to the wrapper again.": "Apple Music 不接受 wrapper 里这个账户的令牌。请在 wrapper 里重新登录该账户。",
+  "Lossless Quality": "无损音质",
+  "Hi-Res Lossless": "高解析度无损",
+  "Lossless": "无损",
+  "With a wrapper, and MyGo Music's quality set to Lossless: Hi-Res Lossless plays each song at the best it has, up to 24-bit/192 kHz; Lossless keeps to 24-bit/48 kHz, which MyGo Music never has to bring down. Where this is a text field (MyGo Music before 0.1.23), leave it empty for Hi-Res Lossless, or type lossless.": "配有 wrapper 且 MyGo Music 的音质设为“无损”时：“高解析度无损”按每首歌的最高规格播放，最高 24 位/192 kHz；“无损”不超过 24 位/48 kHz，MyGo Music 不用降采样。这里若是文本框（MyGo Music 0.1.23 之前），留空为高解析度无损，填 lossless 为无损。"
 }

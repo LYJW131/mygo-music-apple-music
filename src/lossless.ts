@@ -73,10 +73,38 @@ async function audioOf(id: string): Promise<Audio | null> {
   return audio.get(id) ?? null;
 }
 
-/** How amhelper is to find the song's playlist. */
+// The Lossless Quality setting: empty for the best there is, Hi-Res Lossless
+// where a song has it, and "lossless" for Apple's Lossless level, at most
+// 24-bit/48 kHz. MyGo Music from 0.1.23 shows it as a menu; before, it is a
+// text field the listener types the word in, so it's read loosely.
+export const losslessOnly = (): boolean => /^lossless$/i.test(host.setting("losslessQuality").trim());
+
+/** How amhelper is to find the song's playlist, and the most it is to take from it. */
 function playlistQuery(a: Audio | null): string {
-  if (!a?.master) return "";
-  return query({ master: a.master, device: a.hiRes ? 1 : undefined });
+  const only = losslessOnly();
+  return query({
+    master: a?.master,
+    // The wrapper's own playlist is only for the rates the catalog's may leave out, all above 48 kHz.
+    device: a?.master && a.hiRes && !only ? 1 : undefined,
+    maxRate: only ? 48000 : undefined,
+    maxBits: only ? 24 : undefined,
+  });
+}
+
+// Whether a song was worked out at the level the setting now asks for.
+const levelOf = (q: Known): boolean => /[?&]maxRate=/.test(q.query);
+
+/**
+ * The Lossless Quality setting changed: what was worked out is forgotten,
+ * as a song's ALAC at one level isn't its ALAC at the other, and one with
+ * none at 48 kHz or less may have some above.
+ */
+export function forgetLossless(): void {
+  loadKnown();
+  known.clear();
+  found.clear();
+  kept = {};
+  saveKnown();
 }
 
 // What prepare found, so that a song is asked about once: its quality and
@@ -139,7 +167,10 @@ export function prepare(id: string, ahead = false): Promise<Known | null> {
   // One kept from before its loudness was read is asked about again, for it:
   // amhelper has its keys, and reads its playlists and its file's header.
   const was = known.get(id);
-  if (known.has(id) && (was === null || was?.loudness)) return Promise.resolve(was ?? null);
+  // One worked out at the other level (the setting changed by a text field's
+  // host, say, between runs) is too.
+  if (known.has(id) && (was === null || (was?.loudness && levelOf(was!) === losslessOnly())))
+    return Promise.resolve(was ?? null);
   const current = preparing.get(id);
   if (current && (ahead || !current.ahead)) return current.job;
   const job = (async () => {

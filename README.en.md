@@ -137,15 +137,16 @@ plugin lacks it, by the name of the entry under [What the plugin can't do](#limi
 
 **Library**
 
-| Feature                                                       | MyGo Music + this plugin        | Ringo | Why the plugin lacks it               |
-| ------------------------------------------------------------- | ------------------------------- | ----- | ------------------------------------- |
-| Favorite Songs, albums, playlists, recently added             | ✅                              | ✅    |                                       |
-| Creating, renaming and deleting playlists                     | ✅                              | ✅    |                                       |
-| Adding songs to a playlist, removing and reordering them      | ✅                              | ✅    |                                       |
-| Adding albums and playlists to the library, and removing them | ✅                              | ✅    |                                       |
-| Adding one song to the library                                | Partly: added as it's favorited | ✅    | What's in the library                 |
-| Whether each song is in the library                           | ❌                              | ✅    | What's in the library                 |
-| Sorting and finding albums and songs                          | ❌                              | ✅    | It hands over data, and draws nothing |
+| Feature                                                                        | MyGo Music + this plugin        | Ringo | Why the plugin lacks it               |
+| ------------------------------------------------------------------------------ | ------------------------------- | ----- | ------------------------------------- |
+| Favorite Songs, albums, playlists, recently added                              | ✅                              | ✅    |                                       |
+| Creating, renaming and deleting playlists                                      | ✅                              | ✅    |                                       |
+| Adding songs to a playlist, removing and reordering them                       | ✅                              | ✅    |                                       |
+| Adding albums and playlists to the library, and removing them                  | ✅                              | ✅    |                                       |
+| Adding one song to the library                                                 | Partly: added as it's favorited | ✅    | What's in the library                 |
+| Whether each song is in the library                                            | ❌                              | ✅    | What's in the library                 |
+| Sorting and finding albums and songs                                           | ❌                              | ✅    | It hands over data, and draws nothing |
+| Pinned items: shown in the sidebar, pinned, unpinned and reordered by dragging | ❌                              | ✅    | It hands over data, and draws nothing |
 
 **Accounts, lyrics, interface**
 

@@ -10,11 +10,11 @@ Hi-Res Lossless ALAC up to 24-bit/192 kHz (set up [below](#lossless)).
 ## Install and use
 
 1. Click the badge above, and MyGo Music asks to install it; or paste `https://github.com/LYJW131/mygo-music-apple-music` in
-   Settings > Plugins > `+`.
+   Plugins > `+`, in the sidebar. In MyGo Music 0.1.25 and earlier, Plugins is in Settings, here and below.
 2. Choose **Apple Music** as the source.
 3. Sign in with an Apple account that has a subscription. For an account that signs in with a passkey or security key,
    see [below](#media-user-token).
-4. Allow Apple Music to start programs in Settings > Plugins > Apple Music. The plugin's own `amhelper` decrypts songs
+4. Allow Apple Music to start programs in Plugins > Apple Music. The plugin's own `amhelper` decrypts songs
    on this machine and MyGo Music plays them itself, with nothing else to install; only on a platform it doesn't come
    for, such as Windows on arm64, does it play through [ffmpeg](https://ffmpeg.org), which you install.
 
@@ -26,7 +26,7 @@ MyGo Music's sign-in window can't use passkeys. Sign in in your own browser inst
 
 1. On [music.apple.com](https://music.apple.com), signed in, open the developer tools (F12) and copy the value of
    `media-user-token` under Application (Storage) > Cookies > `https://music.apple.com`.
-2. Paste it in Settings > Plugins > Apple Music > **Media User Token**. The whole cookie header works too.
+2. Paste it in Plugins > Apple Music > **Media User Token**. The whole cookie header works too.
 
 That signs you in; emptying it signs you out. When the token runs out (usually after some months), copy and paste a new
 one.
@@ -72,7 +72,7 @@ from it, decrypts the song on this machine as it downloads, and hands it to MyGo
 
 1. Run a wrapper-manager (see below) and sign in to your Apple Music account in it (it needn't be the account in the
    app, but in a different country or region some songs and their keys may not be available).
-2. In Settings > Plugins > Apple Music, set **Wrapper Address**, and **Wrapper Key** if the wrapper is behind a gateway
+2. In Plugins > Apple Music, set **Wrapper Address**, and **Wrapper Key** if the wrapper is behind a gateway
    that checks one.
 3. Set MyGo Music's quality to **Lossless**.
 

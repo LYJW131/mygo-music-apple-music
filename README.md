@@ -8,10 +8,10 @@
 
 ## 安装和使用
 
-1. 点上面的徽章，MyGo Music 会问是否安装；或者在「设置 → 插件 → `+`」里粘贴 `https://github.com/LYJW131/mygo-music-apple-music`。
+1. 点上面的徽章，MyGo Music 会问是否安装；或者在侧边栏的「插件 → `+`」里粘贴 `https://github.com/LYJW131/mygo-music-apple-music`。MyGo Music 0.1.25 及更早的版本里，「插件」在「设置」里，下同。
 2. 来源选择 **Apple Music**。
 3. 点登录，使用有效订阅的 Apple 账户登录。账户用通行密钥或安全密钥登录的，见[下文](#media-user-token)。
-4. 在「设置 → 插件 → Apple Music」里允许启动程序。插件自带的 `amhelper` 在本机解密歌曲，交给 MyGo Music 直接播放，不用另装 ffmpeg；只有 Windows arm64 这类没有 `amhelper` 的平台才要装 [ffmpeg](https://ffmpeg.org)。
+4. 在「插件 → Apple Music」里允许启动程序。插件自带的 `amhelper` 在本机解密歌曲，交给 MyGo Music 直接播放，不用另装 ffmpeg；只有 Windows arm64 这类没有 `amhelper` 的平台才要装 [ffmpeg](https://ffmpeg.org)。
 
 <a id="media-user-token"></a>
 
@@ -20,7 +20,7 @@
 MyGo Music 的登录窗口不支持通行密钥，可以在自己的浏览器里登录，再把令牌交给插件：
 
 1. 在已经登录的 [music.apple.com](https://music.apple.com) 打开开发者工具（F12），「Application / 存储 → Cookies → `https://music.apple.com`」里复制 `media-user-token` 的值。
-2. 粘贴到「设置 → 插件 → Apple Music → **Media User Token**」。也可以直接粘贴整段 Cookie。
+2. 粘贴到「插件 → Apple Music → **Media User Token**」。也可以直接粘贴整段 Cookie。
 
 填好即登录，清空这一项即退出登录。令牌失效后（一般几个月）重新复制一个粘贴进去。
 
@@ -56,7 +56,7 @@ MyGo Music 的登录窗口不支持通行密钥，可以在自己的浏览器里
 ### 设置
 
 1. 部署一个 wrapper-manager（见下表）并登录你的 Apple Music 账户（不一定要与应用中的账户一致，但地区不同时有可能无法获取对应音轨流和密钥）。
-2. 在「设置 → 插件 → Apple Music」里填 **Wrapper 地址**，wrapper 放在要密钥的网关后面时再填 **Wrapper 密钥**。
+2. 在「插件 → Apple Music」里填 **Wrapper 地址**，wrapper 放在要密钥的网关后面时再填 **Wrapper 密钥**。
 3. 把 MyGo Music 的音质设为**无损**。
 
 | 你的情况                                                            | 怎么部署                                                                                                                                                                                                  |
@@ -154,7 +154,7 @@ MyGo Music 是支持多种音源的通用播放器，插件接口只要求音源
 - **只交数据，不画界面**：页面长什么样、按钮放在哪、界面上的文字，都由 MyGo Music 决定，插件只能改自己交出去的标题（MyGo Music 0.1.24 起也包括「喜爱歌曲」「资料库专辑」两页的页面标题），「收藏」「喜欢」这类按钮和提示的说法改不了；页面也只在你点开时才向插件要。
 - **输出采样率**：音频由 MyGo Music 的播放器送出，它的输出固定为 48 kHz，其他采样率都先重采样，96 kHz 的高解析度无损到设备时是 48 kHz。MyGo Music 0.1.24 起降采样前先低通滤波；0.1.21–0.1.23 不滤，24 kHz 以上的内容会折叠回听得见的频段。插件只交出音频，改不了这一点；Ringo 改了播放器，按每首歌自己的采样率输出。
 - **运行环境**：插件跑在 MyGo Music 的 JavaScript 运行时里，每次调用最多 30 秒，内存上限 256 MB，没有 Node 接口。解密和下载你上传的歌曲这类工作放在随插件附带的 `amhelper` 里。
-- **helper 要授权**：`amhelper` 是一个独立程序，要你在设置里允许插件启动程序。没有 `amhelper` 的平台（如 Windows arm64）改用 ffmpeg，那里播放不了你上传的歌曲，没有音量均衡，封面也要靠 ffmpeg 保存。
+- **helper 要授权**：`amhelper` 是一个独立程序，要你在「插件」页里允许插件启动程序。没有 `amhelper` 的平台（如 Windows arm64）改用 ffmpeg，那里播放不了你上传的歌曲，没有音量均衡，封面也要靠 ffmpeg 保存。
 
 ## 跟随 MyGo Music 更新
 
